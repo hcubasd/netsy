@@ -1,0 +1,30 @@
+name: Deployment
+on:
+  push:
+    tags:
+      - "v*.*.*"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/netsy
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: |
+          python -m venv ~/.venv
+          . ~/.venv/bin/activate
+          python -m pip install -U pip hatch
+          python -m hatch build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
