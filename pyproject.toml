@@ -7,7 +7,7 @@ authors = [
   { name = "hcubasd", email = "127428549+hcubasd@users.noreply.github.com" },
 ]
 urls = { Repository = "https://github.com/hcubasd/netsy" }
-dependencies = ["pandas>=3.0", "geopandas>=1.1.3", "scipy>=1.17.1", "shapely>=2.1.2"]
+dependencies = ["pandas>=3.0", "geopandas>=1.1.3", "numpy>=2.5.3", "scipy>=1.17.1", "shapely>=2.1.2"]
 dynamic = ["version"]
 
 [project.scripts]

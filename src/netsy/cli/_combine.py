@@ -1,6 +1,6 @@
-import os
 import sys
 
+from netsy.cli._output import may_write
 from netsy.helpers.files import read_effects, read_thresholds
 
 
@@ -10,8 +10,7 @@ def run_combiner(*, effects, thresholds, output, combine, force):
     existing `output` unless `force`, so a stale file is never silently kept
     and a hand-edited one is never silently lost.
     """
-    if os.path.exists(output) and not force:
-        print(f"{output}: already exists (pass --force to overwrite)", file=sys.stderr)
+    if not may_write(output, force):
         return 1
     try:
         table = combine(read_effects(effects), read_thresholds(thresholds))

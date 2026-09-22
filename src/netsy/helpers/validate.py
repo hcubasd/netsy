@@ -5,6 +5,8 @@ THRESHOLD_COLUMNS = {"resource", "resource_level", "threshold"}
 # Column names the combiners write themselves, so a stratum dimension may not
 # reuse them.
 OUTPUT_KEYS = ("resource", "resource_level", "probability")
+# The columns of a capacities or needs table that are not strata.
+DISTRIBUTION_KEYS = OUTPUT_KEYS
 
 
 def check_effects(effects):
@@ -65,3 +67,48 @@ def check_thresholds(thresholds):
             raise ValueError(f"resource '{resource}': every level but the largest needs a threshold, and the largest must have none")
         if not cutpoints.iloc[:-1].is_monotonic_increasing:
             raise ValueError(f"resource '{resource}': thresholds must be sorted ascending by level")
+
+
+def check_distribution(table):
+    """Raise ValueError unless `table` is a usable capacities or needs table:
+    stratum columns followed by `resource`, `resource_level` (whole units,
+    zero or more) and `probability` (between 0 and 1), with one row per
+    stratum combination, resource and level. Probabilities are not required
+    to sum to one: agents renormalize whatever levels they may still draw.
+    """
+    for column in DISTRIBUTION_KEYS:
+        if column not in table.columns:
+            raise ValueError(f"missing '{column}' column")
+    strata = [c for c in table.columns if c not in DISTRIBUTION_KEYS]
+    if not strata:
+        raise ValueError("must have at least one stratum column")
+    if table.empty:
+        raise ValueError("must have at least one row")
+    if table[strata + ["resource"]].isna().any().any():
+        raise ValueError("stratum and 'resource' columns must not have empty cells")
+    if not pd.api.types.is_integer_dtype(table["resource_level"]) or (table["resource_level"] < 0).any():
+        raise ValueError("'resource_level' must contain whole numbers, zero or more")
+    probability = table["probability"]
+    if not pd.api.types.is_numeric_dtype(probability) or probability.isna().any() or ((probability < 0) | (probability > 1)).any():
+        raise ValueError("'probability' must be a number between 0 and 1 in every row")
+    if table.duplicated(strata + ["resource", "resource_level"]).any():
+        raise ValueError("each stratum, resource and level may appear only once")
+
+
+def check_zones(zones):
+    """Raise ValueError unless `zones` is a usable zones table: a unique
+    `zone_id` per row and a non-empty polygon or multipolygon geometry.
+    Zone ids are compared as text, so 1 and "1" are the same zone.
+    """
+    if "zone_id" not in zones.columns:
+        raise ValueError("missing 'zone_id' column")
+    if zones.empty:
+        raise ValueError("must have at least one zone")
+    if zones["zone_id"].isna().any():
+        raise ValueError("'zone_id' must not have empty cells")
+    if zones.geometry.isna().any() or zones.geometry.is_empty.any():
+        raise ValueError("every zone needs a geometry")
+    if not zones.geometry.geom_type.isin(["Polygon", "MultiPolygon"]).all():
+        raise ValueError("zone geometries must be polygons")
+    if zones["zone_id"].astype(str).duplicated().any():
+        raise ValueError("'zone_id' values must be unique")
