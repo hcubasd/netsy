@@ -80,4 +80,4 @@ $$p_{r,s}(\ell_{r,k}) = F_{r,s}(k) - F_{r,s}(k-1)$$
 
 Capacities and needs are these probabilities. Supply and demand are the expected level rounded to a whole unit:
 
-$$A_{r,s} = \operatorname{round}\left( \sum_{k=1}^{K_r} \ell_{r,k} p_{r,s}(\ell_{r,k}) \right)$$
+$$A_{r,s} = \mathrm{round}\left( \sum_{k=1}^{K_r} \ell_{r,k} p_{r,s}(\ell_{r,k}) \right)$$
