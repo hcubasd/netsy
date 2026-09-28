@@ -12,6 +12,10 @@ SYNTH_COMMANDS = {
         "netsy.cli.synth_agents",
         "supply.csv + demand.csv + capacities.csv + needs.csv + zones.gpkg -> agents.gpkg",
     ),
+    "desire-lines": (
+        "netsy.cli.synth_desire_lines",
+        "agents.gpkg -> desire_lines.gpkg",
+    ),
 }
 
 
@@ -23,8 +27,8 @@ def build_parser():
     for name, (module, description) in SYNTH_COMMANDS.items():
         command = commands.add_parser(name, help=description, description=description)
         command.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
-        if name == "agents":
-            command.add_argument("--seed", type=int, help="seed the random draws, so the same inputs give the same agents")
+        if name in {"agents", "desire-lines"}:
+            command.add_argument("--seed", type=int, help="seed the random draws, so the same inputs give the same output")
         command.set_defaults(module=module)
     return parser
 

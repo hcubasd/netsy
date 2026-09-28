@@ -19,9 +19,12 @@ netsy synth supply       # supply_effects.csv + supply_thresholds.csv -> supply.
 netsy synth demand       # demand_effects.csv + demand_thresholds.csv -> demand.csv
 netsy synth capacities   # capacity_effects.csv + capacity_thresholds.csv -> capacities.csv
 netsy synth needs        # need_effects.csv + need_thresholds.csv -> needs.csv
+netsy synth agents       # supply/demand/capacities/needs + zones.gpkg -> agents.gpkg
+netsy synth desire-lines # agents.gpkg -> desire_lines.gpkg
 ```
 
-An existing output file is only replaced with `--force`. The output is a deterministic function of its two inputs.
+An existing output file is only replaced with `--force`.
+`agents` and `desire-lines` make random draws; pass `--seed` to reproduce them.
 
 ## Data files
 
@@ -63,6 +66,19 @@ An existing output file is only replaced with `--force`. The output is a determi
 | 1 | value_1 | value_1 | resource_1 | 3 | 0.0195 |
 | 1 | value_1 | value_1 | resource_2 | 4 | 0.7980 |
 | 1 | value_1 | value_1 | resource_2 | 9 | 0.2020 |
+
+`agents.gpkg` contains an `agent_id`, its stratum columns, `{resource}_capacity` and
+`{resource}_need` columns, and point geometry. `desire_lines.gpkg` contains one
+provider-to-consumer transaction per row:
+
+| resource | quantity | origin_agent_id | geometry |
+|---|---|---|---|
+| resource_1 | 2 | 1 | LINESTRING (0.42 0.71, 0.38 0.65) |
+
+For each resource, a provider is selected by remaining capacity and matched with
+consumers until the provider is depleted. Consumers are selected by their remaining need
+and distance-weighted proximity. A desire line starts at its provider and ends at its
+consumer.
 
 ## Model
 
