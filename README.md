@@ -21,10 +21,11 @@ netsy synth capacities   # capacity_effects.csv + capacity_thresholds.csv -> cap
 netsy synth needs        # need_effects.csv + need_thresholds.csv -> needs.csv
 netsy synth agents       # supply/demand/capacities/needs + zones.gpkg -> agents.gpkg
 netsy synth desire-lines # agents.gpkg -> desire_lines.gpkg
+netsy synth network-loads --seed 1
 ```
 
 An existing output file is only replaced with `--force`.
-`agents` and `desire-lines` make random draws; pass `--seed` to reproduce them.
+`agents`, `desire-lines`, and `network-loads` make random draws; pass `--seed` to reproduce them.
 
 ## Data files
 
@@ -79,6 +80,43 @@ For each resource, a provider is selected by remaining capacity and matched with
 consumers until the provider is depleted. Consumers are selected by their remaining need
 and distance-weighted proximity. A desire line starts at its provider and ends at its
 consumer.
+
+`network-loads` combines ten supplied files. It does not synthesize their contents:
+
+| file | purpose |
+|---|---|
+| `network.gpkg` | Directed road links: `link_id`, `grade`, `road_type`, `oneway`, and line geometry. |
+| `desire_lines.gpkg` | Provider-to-consumer resource transactions. |
+| `departures.csv` | `resource`, `time_interval`, and departure probability. |
+| `time_intervals.csv` | Ordered `time_interval` values and their `duration`. |
+| `dwell_times.csv` | Per-resource `dwell_time` at every customer stop. |
+| `vehicles.csv` | Vehicle behaviour: BPR parameters, time/distance coefficients, and PCU. |
+| `vehicle_velocities.csv` | Vehicle speed and road accessibility by road type. |
+| `vehicle_capacities.csv` | Capacity of each vehicle for each resource. |
+| `road_capacities.csv` | Road capacity by road type. |
+| `alternative_specific_constants.csv` | Vehicle/resource alternative-specific constants. |
+
+`network.gpkg` and `desire_lines.gpkg` must share a projected CRS. Link lengths,
+vehicle velocities, and interval durations must use compatible units. There is no
+`consolidation_radii.csv`: capacity-constrained routing replaces radius consolidation.
+`dwell_times.csv` no longer has `load_pct`; vehicles return empty after their final stop.
+
+`network_loads.csv` is the only output. It has a row per directional link, interval,
+resource, vehicle, and payload fraction:
+
+| link_id | time_interval | resource | vehicle | forward | vehicle_count | velocity | load_pct |
+|---|---|---|---|---|---:|---:|---:|
+| 17 | morning | parcels | van | true | 3 | 34.2 | 1.0 |
+| 17 | morning | parcels | van | false | 3 | 29.8 | 0.0 |
+
+For each resource, its total transaction quantity is apportioned exactly across the
+defined time intervals. Within an interval, providers and seed consumers are drawn by
+remaining transaction quantity. For every feasible vehicle type, NetSy builds a
+capacity-constrained, provider-returning tour by cheapest insertion on the directed road
+network, then chooses a vehicle-tour alternative with multinomial logit. A tour serves one
+resource, may split a delivery across tours, waits at every customer, and returns empty.
+Payload fractions remain separate output strata so downstream emissions retain their
+per-leg payload information.
 
 ## Model
 
