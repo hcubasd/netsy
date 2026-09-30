@@ -1,6 +1,9 @@
 # netsy
 
-Synthesizes aggregate supply and demand, and the capacity and need distributions of individual agents, from effects and thresholds files.
+Synthesizes agents, resource desire lines, capacity-constrained road-network loads, and
+COPERT V emissions. Ordered-logit effects and thresholds define supply, demand, capacities,
+and needs; supplied network, vehicle, timing, and emission files carry the synthesis through
+to directional link emissions.
 
 ## Install
 
@@ -19,10 +22,10 @@ netsy synth supply       # supply_effects.csv + supply_thresholds.csv -> supply.
 netsy synth demand       # demand_effects.csv + demand_thresholds.csv -> demand.csv
 netsy synth capacities   # capacity_effects.csv + capacity_thresholds.csv -> capacities.csv
 netsy synth needs        # need_effects.csv + need_thresholds.csv -> needs.csv
-netsy synth agents       # supply/demand/capacities/needs + zones.gpkg -> agents.gpkg
-netsy synth desire-lines # agents.gpkg -> desire_lines.gpkg
-netsy synth network-loads --seed 1
-netsy synth network-emissions
+netsy synth agents --seed 1       # supply/demand/capacities/needs + zones.gpkg -> agents.gpkg
+netsy synth desire-lines --seed 1 # agents.gpkg -> desire_lines.gpkg
+netsy synth network-loads --seed 1 # network/desire lines + ten inputs -> network_loads.csv
+netsy synth network-emissions      # network loads + COPERT inputs -> network_emissions.csv
 ```
 
 An existing output file is only replaced with `--force`.
@@ -103,7 +106,7 @@ COPERT V requires interval durations in hours. There is no
 `consolidation_radii.csv`: capacity-constrained routing replaces radius consolidation.
 `dwell_times.csv` no longer has `load_pct`; vehicles return empty after their final stop.
 
-`network_loads.csv` is the only output. It has a row per directional link, interval,
+`network_loads.csv` has a row per directional link, interval,
 resource, vehicle, and payload fraction:
 
 | link_id | time_interval | resource | vehicle | forward | vehicle_count | velocity | load_pct |
@@ -156,3 +159,21 @@ $$p_{r,s}(\ell_{r,k}) = F_{r,s}(k) - F_{r,s}(k-1)$$
 Capacities and needs are these probabilities. Supply and demand are the expected level rounded to a whole unit:
 
 $$A_{r,s} = \mathrm{round}\left( \sum_{k=1}^{K_r} \ell_{r,k} p_{r,s}(\ell_{r,k}) \right)$$
+
+Agents are sampled independently from their stratum's capacity and need distributions while
+remaining aggregate supply and demand permit. Desire lines then match each resource's
+providers to consumers by remaining quantity and distance-weighted proximity.
+
+Network loads apportion each resource's desire-line total exactly across departure
+intervals. Within an interval, NetSy draws a provider and seed consumer from residual
+flow, builds a capacity-constrained provider-returning tour for every feasible vehicle type
+by cheapest insertion, and selects a vehicle-tour alternative with multinomial logit.
+Vehicle movement uses directed road links and a BPR volume-delay function; vehicles dwell at
+each customer and return empty. Load rows retain payload fractions rather than averaging
+away the changing payload of a multi-stop tour.
+
+Network emissions use each load row's vehicle type, velocity, directed grade, and payload
+to evaluate the corresponding COPERT V hot-exhaust factor. Non-exhaust emissions are
+separate, velocity-independent g/km factors. Both sources scale their factor by directional
+link distance and vehicle count. See [`netsy-report`](https://github.com/hcubasd/netsy-report)
+for the complete equations and file-shape appendix.
