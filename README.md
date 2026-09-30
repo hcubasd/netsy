@@ -22,6 +22,7 @@ netsy synth needs        # need_effects.csv + need_thresholds.csv -> needs.csv
 netsy synth agents       # supply/demand/capacities/needs + zones.gpkg -> agents.gpkg
 netsy synth desire-lines # agents.gpkg -> desire_lines.gpkg
 netsy synth network-loads --seed 1
+netsy synth network-emissions
 ```
 
 An existing output file is only replaced with `--force`.
@@ -96,8 +97,9 @@ consumer.
 | `road_capacities.csv` | Road capacity by road type. |
 | `alternative_specific_constants.csv` | Vehicle/resource alternative-specific constants. |
 
-`network.gpkg` and `desire_lines.gpkg` must share a projected CRS. Link lengths,
-vehicle velocities, and interval durations must use compatible units. There is no
+`network.gpkg` and `desire_lines.gpkg` must share a CRS. NetSy transiently normalizes
+their geometry to kilometres; vehicle velocities are kilometres per interval-time unit and
+COPERT V requires interval durations in hours. There is no
 `consolidation_radii.csv`: capacity-constrained routing replaces radius consolidation.
 `dwell_times.csv` no longer has `load_pct`; vehicles return empty after their final stop.
 
@@ -117,6 +119,25 @@ network, then chooses a vehicle-tour alternative with multinomial logit. A tour 
 resource, may split a delivery across tours, waits at every customer, and returns empty.
 Payload fractions remain separate output strata so downstream emissions retain their
 per-leg payload information.
+
+`network-emissions` combines `network_loads.csv`, `network.gpkg`, `vehicles.csv`,
+`copert_v_coefficients.csv`, and `emission_factors.csv` into `network_emissions.csv`.
+The coefficient file has one row per COPERT V
+`vehicle_type`, `pollutant`, `gradient_bin`, and `payload_bin`, with columns `alpha`
+through `eta` and reduction factor `rf`. Gradient bins are `-6, -4, -2, 0, 2, 4, 6`;
+payload bins are `0, 50, 100`. The flat non-exhaust factor file has
+`vehicle_type`, `pollutant`, and `emission_factor` in g/km.
+
+| link_id | time_interval | resource | vehicle | forward | pollutant | source | grams |
+|---|---|---|---|---|---|---|---:|
+| 17 | morning | parcels | van | true | nox | exhaust | 12.84 |
+| 17 | morning | parcels | van | true | pm10 | non-exhaust | 0.67 |
+
+Exhaust follows the COPERT V speed function. It uses each load row's velocity, payload
+fraction, and directed link grade, snapping grade and payload to the published coefficient
+grid before scaling the resulting g/km factor by link distance and vehicle count.
+Non-exhaust emissions remain velocity-independent g/km factors scaled by the same
+distance and count; no unsupported speed relationship is invented.
 
 ## Model
 

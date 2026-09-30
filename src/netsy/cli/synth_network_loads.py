@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from netsy.cli._output import may_write
+from netsy.helpers.geometry import kilometers
 from netsy.synth.network_loads import network_loads
 
 
@@ -53,8 +54,6 @@ def _validate(frames):
     network, desire_lines = frames["network.gpkg"], frames["desire_lines.gpkg"]
     if network.crs is None or desire_lines.crs is None or network.crs != desire_lines.crs:
         raise ValueError("network.gpkg and desire_lines.gpkg: both need the same CRS")
-    if not network.crs.is_projected:
-        raise ValueError("network.gpkg: CRS must be projected")
     if network.geometry.isna().any() or not network.geometry.geom_type.eq("LineString").all():
         raise ValueError("network.gpkg: every geometry must be a line")
     if desire_lines.geometry.isna().any() or not desire_lines.geometry.geom_type.eq("LineString").all():
@@ -95,6 +94,9 @@ def run(force=False, seed=None):
     try:
         frames = {path: _read(path) for path in _INPUTS}
         _validate(frames)
+        metric_crs = frames["network.gpkg"].estimate_utm_crs() if frames["network.gpkg"].crs.is_geographic else frames["network.gpkg"].crs
+        frames["network.gpkg"] = kilometers(frames["network.gpkg"], "network.gpkg", metric_crs)
+        frames["desire_lines.gpkg"] = kilometers(frames["desire_lines.gpkg"], "desire_lines.gpkg", metric_crs)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             rows = network_loads(

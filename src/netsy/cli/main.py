@@ -20,6 +20,10 @@ SYNTH_COMMANDS = {
         "netsy.cli.synth_network_loads",
         "network.gpkg + desire_lines.gpkg + supporting CSVs -> network_loads.csv",
     ),
+    "network-emissions": (
+        "netsy.cli.synth_network_emissions",
+        "network_loads.csv + COPERT V inputs -> network_emissions.csv",
+    ),
 }
 
 
