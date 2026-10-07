@@ -30,5 +30,23 @@ the current core chain: zones with supply, demand, capacities, or needs; agents;
 lines; road-network grades, loads, and emissions. It preserves the source CRS and requires
 all loaded GeoPackage overlays to use the same CRS.
 
-The diagram is a WebGL2 Perlin-noise backdrop using Nicrainha's default-lightness palette.
-All data-bearing colors use the same color-science palette; interface chrome is grayscale.
+The visualizer uses Nicrainha's default-lightness palette in a WebGL2 Perlin-noise scene.
+Its ordinary interface panels are physical refractive glass: the shader moves their
+background sample positions. A low-opacity white CSS overlay then adds a controllable
+backdrop blur above the physical glass.
+
+## Scene controls
+
+The glass uses the Nicrainha focal-plane air gap (`4R/3` for glass with refractive index
+`1.5`). Add `?gap=<pixels>` to increase that air gap in CSS pixels for all nonzero-radius
+panels; for example, `?gap=2` adds two pixels. Invalid or negative values use the default
+extra gap of `0`. A panel with a corner radius of exactly zero remains optically invisible:
+without a curved surface, a straight-on view has no refraction to reveal.
+
+Add `?blur=<pixels>` to set the CSS backdrop-blur radius on ordinary glass panels.
+It defaults to `12`; `?blur=0` removes the CSS blur while retaining the physical glass.
+Invalid or negative values use the default, and values above `64` are capped.
+
+Add `?lightness=<0-100>` to set the CIE Lab lightness used by both the animated
+background and NetSy's categorical and continuous palettes. Omit it to use Nicrainha's
+default lightness; invalid values also use that default.

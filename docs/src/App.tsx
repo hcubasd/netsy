@@ -1,6 +1,6 @@
-import { useState, type DragEvent } from 'react'
+import { useState, type CSSProperties, type DragEvent } from 'react'
 import { MapCanvas } from './MapCanvas'
-import { PerlinBackdrop } from './PerlinBackdrop'
+import { NicrainhaScene } from './NicrainhaScene'
 import { continuousPalette, cssColor } from './palette'
 import { parseFile, tableByName } from './loaders'
 import type { Cell, DataTable, ValueFeature } from './types'
@@ -34,6 +34,11 @@ const dimensions = ['resource', 'time_interval', 'vehicle', 'pollutant', 'source
 const numeric = (value: Cell | undefined) => typeof value === 'number' && Number.isFinite(value)
 const titleCase = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 const valueString = (value: Cell | undefined) => value === null || value === undefined ? '' : String(value)
+const displayFilename = (value: string) => titleCase(value.replace(/\.[^.]+$/, ''))
+const blur = (() => {
+  const value = Number(new URLSearchParams(window.location.search).get('blur'))
+  return Number.isFinite(value) && value >= 0 ? Math.min(value, 64) : 12
+})()
 
 function filename(table: DataTable) {
   return table.filename.toLowerCase()
@@ -103,8 +108,8 @@ function MapView({ tables }: { tables: DataTable[] }) {
   const values = features.flatMap((feature) => feature.value === null ? [] : [feature.value])
   const range = values.length ? `${Math.min(...values).toLocaleString()} — ${Math.max(...values).toLocaleString()}` : 'No matching values'
   return (
-    <section className="view map-view">
-      <aside className="controls" aria-label="Map controls">
+    <section className="map-view workspace">
+      <aside className="controls glass-panel" data-glass-panel aria-label="Map controls">
         <label>Layer
           <select value={activeLayerName} onChange={(event) => setLayerName(event.target.value as Layer)}>
             {available.map(([name, specification]) => <option key={name} value={name}>{specification.label}</option>)}
@@ -143,19 +148,17 @@ function MapView({ tables }: { tables: DataTable[] }) {
 }
 
 const stages: [string, string[]][] = [
-  ['Effects & thresholds', ['supply_effects.csv', 'supply_thresholds.csv', 'demand_effects.csv', 'demand_thresholds.csv', 'capacity_effects.csv', 'capacity_thresholds.csv', 'need_effects.csv', 'need_thresholds.csv']],
-  ['Stratified synthesis', ['supply.csv', 'demand.csv', 'capacities.csv', 'needs.csv', 'zones.gpkg']],
-  ['Agents & flows', ['agents.gpkg', 'desire_lines.gpkg', 'network.gpkg']],
-  ['Loads & emissions', ['departures.csv', 'time_intervals.csv', 'dwell_times.csv', 'vehicles.csv', 'vehicle_velocities.csv', 'vehicle_capacities.csv', 'road_capacities.csv', 'alternative_specific_constants.csv', 'network_loads.csv', 'copert_v_coefficients.csv', 'emission_factors.csv', 'network_emissions.csv']],
+  ['Effects & Thresholds', ['supply_effects.csv', 'supply_thresholds.csv', 'demand_effects.csv', 'demand_thresholds.csv', 'capacity_effects.csv', 'capacity_thresholds.csv', 'need_effects.csv', 'need_thresholds.csv']],
+  ['Stratified Synthesis', ['supply.csv', 'demand.csv', 'capacities.csv', 'needs.csv', 'zones.gpkg']],
+  ['Agents & Flows', ['agents.gpkg', 'desire_lines.gpkg', 'network.gpkg']],
+  ['Loads & Emissions', ['departures.csv', 'time_intervals.csv', 'dwell_times.csv', 'vehicles.csv', 'vehicle_velocities.csv', 'vehicle_capacities.csv', 'road_capacities.csv', 'alternative_specific_constants.csv', 'network_loads.csv', 'copert_v_coefficients.csv', 'emission_factors.csv', 'network_emissions.csv']],
 ]
 
 function DiagramView({ tables }: { tables: DataTable[] }) {
   const loaded = new Set(tables.map(filename))
   return (
-    <section className="diagram-view view">
-      <PerlinBackdrop />
+    <section className="diagram-view workspace">
       <div className="diagram-content">
-        <header className="diagram-heading"><p>NetSy pipeline</p><h2>Inputs become spatial flows, network loads, and emissions.</h2></header>
         <div className="diagram-stages">
           {stages.map(([title, files], stageIndex) => (
             <section className="diagram-stage" key={title}>
@@ -163,8 +166,8 @@ function DiagramView({ tables }: { tables: DataTable[] }) {
               <div className="diagram-cards">
                 {files.map((file, index) => {
                   const isLoaded = loaded.has(file)
-                  return <div className={`diagram-card ${isLoaded ? 'loaded' : ''}`} key={file} style={isLoaded ? { borderColor: cssColor(continuousPalette[(stageIndex * 43 + index * 19) % 256], .9) } : undefined}>
-                    <span className="status-dot" /><code>{file}</code><small>{isLoaded ? 'Loaded' : 'Awaiting file'}</small>
+                  return <div className={`diagram-card glass-panel ${isLoaded ? 'loaded' : ''}`} data-glass-panel key={file} style={isLoaded ? { color: cssColor(continuousPalette[(stageIndex * 43 + index * 19) % 256]) } : undefined}>
+                    <span className="status-dot" /><code>{displayFilename(file)}</code><small>{isLoaded ? 'Loaded' : 'Awaiting file'}</small>
                   </div>
                 })}
               </div>
@@ -180,6 +183,7 @@ function TableView({ tables }: { tables: DataTable[] }) {
   const [selected, setSelected] = useState('')
   const [page, setPage] = useState(0)
   const [query, setQuery] = useState('')
+  const [zoom, setZoom] = useState(0)
   const activeSelected = tables.some((table) => table.filename === selected) ? selected : tables[0]?.filename ?? ''
   const table = tables.find((candidate) => candidate.filename === activeSelected)
   const rows = table?.rows.filter((row) => Object.values(row).some((cell) => valueString(cell).toLowerCase().includes(query.toLowerCase()))) ?? []
@@ -187,16 +191,19 @@ function TableView({ tables }: { tables: DataTable[] }) {
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
   const visible = rows.slice(page * pageSize, (page + 1) * pageSize)
   return (
-    <section className="table-view view">
-      <header className="table-toolbar">
-        <label>Table <select value={activeSelected} onChange={(event) => { setSelected(event.target.value); setPage(0) }}>{tables.map((item) => <option key={item.filename}>{item.filename}</option>)}</select></label>
+    <section className="table-view workspace">
+      <header className="table-toolbar glass-panel" data-glass-panel>
+        <label>Table <select value={activeSelected} onChange={(event) => { setSelected(event.target.value); setPage(0) }}>{tables.map((item) => <option key={item.filename} value={item.filename}>{displayFilename(item.filename)}</option>)}</select></label>
         <label>Filter <input value={query} placeholder="Match any value" onChange={(event) => { setQuery(event.target.value); setPage(0) }} /></label>
+        <label>Text size <output>{Math.round(12 * 1.12 ** zoom)}px</output>
+          <input type="range" min="-4" max="6" step="1" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+        </label>
         <span>{rows.length.toLocaleString()} rows</span>
       </header>
-      {table ? <div className="table-scroll"><table><thead><tr>{table.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>
+      {table ? <div className="table-shell"><div className="table-scroll" style={{ '--table-font-size': `${Math.round(12 * 1.12 ** zoom)}px` } as CSSProperties}><table><thead><tr>{table.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>
         {visible.map((row, index) => <tr key={index}>{table.columns.map((column) => <td key={column} className={numeric(row[column]) ? 'numeric' : ''}>{valueString(row[column])}</td>)}</tr>)}
-      </tbody></table></div> : <div className="empty-state">Load one or more CSV or GeoPackage files to inspect their records.</div>}
-      {table && <footer className="pagination"><button disabled={page === 0} onClick={() => setPage((current) => current - 1)}>Previous</button><span>Page {page + 1} of {pageCount}</span><button disabled={page + 1 === pageCount} onClick={() => setPage((current) => current + 1)}>Next</button></footer>}
+      </tbody></table></div></div> : <div className="empty-state glass-panel" data-glass-panel>Load one or more CSV or GeoPackage files to inspect their records.</div>}
+      {table && <footer className="pagination glass-panel" data-glass-panel><button data-glass-panel data-glass-shape="circle" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>←</button><span>Page {page + 1} of {pageCount}</span><button data-glass-panel data-glass-shape="circle" disabled={page + 1 === pageCount} onClick={() => setPage((current) => current + 1)}>→</button></footer>}
     </section>
   )
 }
@@ -206,7 +213,7 @@ function FileLoader({ onFiles, busy }: { onFiles: (files: FileList | File[]) => 
     event.preventDefault()
     onFiles(event.dataTransfer.files)
   }
-  return <label className="file-loader" onDragOver={(event) => event.preventDefault()} onDrop={drop}>
+  return <label className="file-loader glass-panel" data-glass-panel onDragOver={(event) => event.preventDefault()} onDrop={drop}>
     <input type="file" accept=".csv,.gpkg" multiple onChange={(event) => event.target.files && onFiles(event.target.files)} />
     <strong>{busy ? 'Loading files…' : 'Load NetSy outputs'}</strong><span>Drop CSV and GeoPackage files, or browse locally. Files stay in this browser.</span>
   </label>
@@ -221,7 +228,12 @@ function App() {
     setBusy(true)
     setError('')
     try {
-      const parsed = await Promise.all([...files].map(parseFile))
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      const parsed: DataTable[] = []
+      for (const file of files) {
+        parsed.push(await parseFile(file))
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      }
       const srs = parsed.filter((table) => table.srsId !== undefined).map((table) => table.srsId)
       if (new Set(srs).size > 1) throw new Error('Loaded GeoPackage overlays must use the same CRS.')
       setTables((current) => [...current.filter((table) => !parsed.some((next) => filename(next) === filename(table))), ...parsed])
@@ -232,17 +244,20 @@ function App() {
     }
   }
   return (
-    <main>
+    <>
+      <NicrainhaScene />
+      <main style={{ '--glass-blur': `${blur}px` } as CSSProperties}>
       <header className="site-header">
-        <div><p className="eyebrow">NetSy visualizer</p><h1>Understand the synthesis.</h1></div>
-        <nav aria-label="Visualizer views">{(['map', 'diagram', 'tables'] as View[]).map((name) => <button className={view === name ? 'active' : ''} key={name} onClick={() => setView(name)}>{titleCase(name)}</button>)}</nav>
+        <div className="brand glass-panel" data-glass-panel><h1>NetSy</h1></div>
+        <nav className="glass-panel" data-glass-panel aria-label="Visualizer views">{(['map', 'diagram', 'tables'] as View[]).map((name) => <button className={view === name ? 'active' : ''} key={name} onClick={() => setView(name)}>{titleCase(name)}</button>)}</nav>
         <FileLoader onFiles={onFiles} busy={busy} />
       </header>
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <p className="error glass-panel" data-glass-panel role="alert">{error}</p>}
       {view === 'map' && <MapView tables={tables} />}
       {view === 'diagram' && <DiagramView tables={tables} />}
       {view === 'tables' && <TableView tables={tables} />}
-    </main>
+      </main>
+    </>
   )
 }
 

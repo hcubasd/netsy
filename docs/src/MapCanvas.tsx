@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { colorScale } from './palette'
+import { continuousPalette } from './palette'
 import type { Geometry, Position, ValueFeature } from './types'
 
 interface Bounds {
@@ -88,6 +88,28 @@ function program(gl: WebGL2RenderingContext) {
   return result
 }
 
+function paletteColor(value: number | null, sortedValues: number[]) {
+  if (value === null) return [.45, .45, .45, .45]
+  let lower = 0
+  let upper = sortedValues.length
+  while (lower < upper) {
+    const middle = Math.floor((lower + upper) / 2)
+    if (sortedValues[middle] < value) lower = middle + 1
+    else upper = middle
+  }
+  const color = continuousPalette[Math.round(lower / Math.max(sortedValues.length - 1, 1) * 255)]
+  return [color.r / 255, color.g / 255, color.b / 255, .9]
+}
+
+interface Resources {
+  gl: WebGL2RenderingContext
+  program: WebGLProgram
+  buffer: WebGLBuffer
+  position: number
+  color: number
+  size: WebGLUniformLocation | null
+}
+
 export function MapCanvas({
   features,
   lineWidth,
@@ -100,12 +122,25 @@ export function MapCanvas({
   const canvas = useRef<HTMLCanvasElement>(null)
   const [camera, setCamera] = useState({ x: 0, y: 0, zoom: 1 })
   const drag = useRef<{ x: number; y: number } | null>(null)
+  const resources = useRef<Resources | null>(null)
   const bounds = useMemo(() => (features.length ? boundsOf(features) : null), [features])
+  const sortedValues = useMemo(
+    () => features.flatMap((feature) => feature.value === null ? [] : [feature.value]).sort((left, right) => left - right),
+    [features],
+  )
+
+  useEffect(() => () => {
+    const current = resources.current
+    if (!current) return
+    current.gl.deleteBuffer(current.buffer)
+    current.gl.deleteProgram(current.program)
+    resources.current = null
+  }, [])
 
   useEffect(() => {
     const element = canvas.current
     if (!element || !bounds) return
-    const gl = element.getContext('webgl2', { antialias: true, alpha: false })
+    const gl = element.getContext('webgl2', { antialias: true, alpha: true })
     if (!gl) return
     const resize = () => {
       const ratio = window.devicePixelRatio || 1
@@ -129,14 +164,9 @@ export function MapCanvas({
         (.5 - (y - centreY) / span) * height,
       ]
       const clip = ([x, y]: Position): Position => [x / width * 2 - 1, 1 - y / height * 2]
-      const values = features.flatMap((feature) => feature.value === null ? [] : [feature.value])
       const vertices: number[] = []
       const append = (point: Position, color: number[]) => vertices.push(...clip(point), ...color)
-      const colorOf = (value: number | null) => {
-        if (value === null) return [.45, .45, .45, .45]
-        const color = colorScale(value, values)
-        return [color.r / 255, color.g / 255, color.b / 255, .9]
-      }
+      const colorOf = (value: number | null) => paletteColor(value, sortedValues)
       const diagonal = Math.hypot(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
       for (const feature of features) {
         const color = colorOf(feature.value)
@@ -158,22 +188,33 @@ export function MapCanvas({
         }
       }
       const draws = new Float32Array(vertices)
-      const shader = program(gl)
-      const buffer = gl.createBuffer()
-      gl.clearColor(.05, .05, .05, 1)
+      let resource = resources.current
+      if (!resource || resource.gl !== gl) {
+        const activeProgram = program(gl)
+        const activeBuffer = gl.createBuffer()
+        if (!activeBuffer) throw new Error('WebGL buffer allocation failed.')
+        resource = {
+          gl,
+          program: activeProgram,
+          buffer: activeBuffer,
+          position: gl.getAttribLocation(activeProgram, 'a_position'),
+          color: gl.getAttribLocation(activeProgram, 'a_color'),
+          size: gl.getUniformLocation(activeProgram, 'u_size'),
+        }
+        resources.current = resource
+      }
+      gl.clearColor(1, 1, 1, .7)
       gl.clear(gl.COLOR_BUFFER_BIT)
-      gl.useProgram(shader)
+      gl.useProgram(resource.program)
       gl.enable(gl.BLEND)
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-      gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+      gl.bindBuffer(gl.ARRAY_BUFFER, resource.buffer)
       gl.bufferData(gl.ARRAY_BUFFER, draws, gl.STREAM_DRAW)
-      const position = gl.getAttribLocation(shader, 'a_position')
-      const color = gl.getAttribLocation(shader, 'a_color')
-      gl.enableVertexAttribArray(position)
-      gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 24, 0)
-      gl.enableVertexAttribArray(color)
-      gl.vertexAttribPointer(color, 4, gl.FLOAT, false, 24, 8)
-      gl.uniform1f(gl.getUniformLocation(shader, 'u_size'), Math.max(5, lineWidth * 2) * (window.devicePixelRatio || 1))
+      gl.enableVertexAttribArray(resource.position)
+      gl.vertexAttribPointer(resource.position, 2, gl.FLOAT, false, 24, 0)
+      gl.enableVertexAttribArray(resource.color)
+      gl.vertexAttribPointer(resource.color, 4, gl.FLOAT, false, 24, 8)
+      gl.uniform1f(resource.size, Math.max(5, lineWidth * 2) * (window.devicePixelRatio || 1))
       gl.drawArrays(gl.TRIANGLES, 0, draws.length / 6)
       const points: number[] = []
       for (const feature of features) {
@@ -182,12 +223,10 @@ export function MapCanvas({
       }
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points), gl.STREAM_DRAW)
       gl.drawArrays(gl.POINTS, 0, points.length / 6)
-      gl.deleteBuffer(buffer)
-      gl.deleteProgram(shader)
     }
     render()
     return () => observer.disconnect()
-  }, [bounds, camera, features, lineWidth, simplification])
+  }, [bounds, camera, features, lineWidth, simplification, sortedValues])
 
   if (!bounds) return <div className="empty-state">Load geometry and a matching table to render the map.</div>
   return (
