@@ -8,7 +8,8 @@ const glassIor = 1.5
 const gapRatio = 1 / (glassIor - 1) - 1 / glassIor
 const parameters = new URLSearchParams(window.location.search)
 const gapOffset = (() => {
-  const value = Number(parameters.get('gap'))
+  const parameter = parameters.get('gap')
+  const value = parameter === null ? Number.NaN : Number(parameter)
   return Number.isFinite(value) && value >= 0 ? value : 100
 })()
 

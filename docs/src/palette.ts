@@ -2,7 +2,8 @@ import { generatePalettes } from 'nicrainha'
 import type { PaletteColor } from './types'
 
 const rotation = 37
-const requestedLightness = Number(new URLSearchParams(window.location.search).get('lightness'))
+const lightnessParameter = new URLSearchParams(window.location.search).get('lightness')
+const requestedLightness = lightnessParameter === null ? Number.NaN : Number(lightnessParameter)
 export const paletteOptions = Number.isFinite(requestedLightness) && requestedLightness >= 0 && requestedLightness <= 100
   ? { lightness: requestedLightness }
   : { lightness: 86 }

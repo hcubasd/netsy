@@ -36,7 +36,8 @@ const titleCase = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g,
 const valueString = (value: Cell | undefined) => value === null || value === undefined ? '' : String(value)
 const displayFilename = (value: string) => titleCase(value.replace(/\.[^.]+$/, ''))
 const blur = (() => {
-  const value = Number(new URLSearchParams(window.location.search).get('blur'))
+  const parameter = new URLSearchParams(window.location.search).get('blur')
+  const value = parameter === null ? Number.NaN : Number(parameter)
   return Number.isFinite(value) && value >= 0 ? Math.min(value, 64) : 20
 })()
 
