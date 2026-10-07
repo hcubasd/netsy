@@ -9,7 +9,7 @@ const gapRatio = 1 / (glassIor - 1) - 1 / glassIor
 const parameters = new URLSearchParams(window.location.search)
 const gapOffset = (() => {
   const value = Number(parameters.get('gap'))
-  return Number.isFinite(value) && value >= 0 ? value : 0
+  return Number.isFinite(value) && value >= 0 ? value : 100
 })()
 
 const vertex = `#version 300 es

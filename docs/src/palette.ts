@@ -5,7 +5,7 @@ const rotation = 37
 const requestedLightness = Number(new URLSearchParams(window.location.search).get('lightness'))
 export const paletteOptions = Number.isFinite(requestedLightness) && requestedLightness >= 0 && requestedLightness <= 100
   ? { lightness: requestedLightness }
-  : undefined
+  : { lightness: 86 }
 export const continuousPalette = generatePalettes(256, paletteOptions)[rotation] as PaletteColor[]
 export const categoricalPalette = generatePalettes(12, paletteOptions)[rotation] as PaletteColor[]
 

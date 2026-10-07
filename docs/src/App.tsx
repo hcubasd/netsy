@@ -37,7 +37,7 @@ const valueString = (value: Cell | undefined) => value === null || value === und
 const displayFilename = (value: string) => titleCase(value.replace(/\.[^.]+$/, ''))
 const blur = (() => {
   const value = Number(new URLSearchParams(window.location.search).get('blur'))
-  return Number.isFinite(value) && value >= 0 ? Math.min(value, 64) : 12
+  return Number.isFinite(value) && value >= 0 ? Math.min(value, 64) : 20
 })()
 
 function filename(table: DataTable) {
