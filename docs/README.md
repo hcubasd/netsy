@@ -32,16 +32,19 @@ all loaded GeoPackage overlays to use the same CRS.
 
 The visualizer uses a lightness-86 Nicrainha palette in a WebGL2 Perlin-noise scene.
 Its ordinary interface panels are physical refractive glass: the shader moves their
-background sample positions. A low-opacity white CSS overlay then adds a controllable
-backdrop blur above the physical glass.
+background sample positions and lifts their colors toward white according to the local
+glass thickness. A low-opacity white CSS overlay then adds a controllable backdrop blur
+above the physical glass.
 
 ## Scene controls
 
 The glass uses the Nicrainha focal-plane air gap (`4R/3` for glass with refractive index
-`1.5`). Its default adds `100` CSS pixels to that gap for all nonzero-radius panels.
-Add `?gap=<pixels>` to override the extra gap; for example, `?gap=2` uses two pixels.
-Invalid or negative values use the `100`-pixel default. A panel with a corner radius of exactly zero remains optically invisible:
-without a curved surface, a straight-on view has no refraction to reveal.
+`1.5`), derived from each panel's corner radius `R`. Its thickness similarly lifts the
+selected background lightness exponentially toward `100`: `L = 100 - (100 - L_bg) e^(-h/l)`,
+where `h` is the local glass thickness and `l` is an 8rem whitening length. A panel with
+radius zero has neither gap nor lightness lift. All ordinary panels use the shared
+`--radius` CSS custom property, so the same corner radius has the same material response
+regardless of panel size.
 
 Add `?blur=<pixels>` to set the CSS backdrop-blur radius on ordinary glass panels.
 It defaults to `20`; `?blur=0` removes the CSS blur while retaining the physical glass.

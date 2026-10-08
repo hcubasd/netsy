@@ -1,17 +1,16 @@
 import { useEffect, useRef } from 'react'
-import { generatePalettes } from 'nicrainha'
 import { buildPermutation, fieldRange } from './glassNoise'
-import { paletteOptions } from './palette'
+import { buildLightnessRings } from './lightnessRings'
+import { backgroundLightness } from './palette'
+import { baseLightness, rgb, rows } from 'virtual:lightness-rings'
 
 const maximumPanels = 40
 const glassIor = 1.5
 const gapRatio = 1 / (glassIor - 1) - 1 / glassIor
-const parameters = new URLSearchParams(window.location.search)
-const gapOffset = (() => {
-  const parameter = parameters.get('gap')
-  const value = parameter === null ? Number.NaN : Number(parameter)
-  return Number.isFinite(value) && value >= 0 ? value : 100
-})()
+const whiteLengthRem = 8
+const lightnessRings = backgroundLightness === baseLightness
+  ? Uint8Array.from(atob(rgb), (character) => character.charCodeAt(0))
+  : buildLightnessRings(backgroundLightness)
 
 const vertex = `#version 300 es
 void main() {
@@ -28,6 +27,7 @@ const int MAX_STEPS = 512;
 const int MAX_BOUNCES = 64;
 uniform usampler2D u_perm;
 uniform sampler2D u_palette;
+uniform int u_rows;
 uniform vec2 u_resolution;
 uniform float u_z;
 uniform float u_min;
@@ -36,7 +36,7 @@ uniform int u_count;
 uniform vec4 u_panels[MAX_PANELS];
 uniform float u_radii[MAX_PANELS];
 uniform float u_ior;
-uniform float u_gap_offset;
+uniform float u_white_length;
 out vec4 outColor;
 
 int P(int i) { return int(texelFetch(u_perm, ivec2(i & 255, 0), 0).r); }
@@ -122,34 +122,44 @@ void traceGlass(inout vec3 position, inout vec3 direction, vec2 halfSize, float 
     direction = reflect(direction, normal);
   }
 }
-vec2 seenThroughPanel(vec2 pixel, vec4 panel, float radius) {
+vec2 seenThroughPanel(vec2 pixel, vec4 panel, float radius, out float thickness) {
   vec2 local = pixel - panel.xy;
   vec2 offset = offsetFromInner(local, panel.zw, radius);
   float distance = length(offset);
-  if (distance >= radius) return pixel;
-  float gap = ${gapRatio.toFixed(8)} * radius + u_gap_offset;
+  if (distance >= radius) {
+    thickness = 0.0;
+    return pixel;
+  }
+  float gap = ${gapRatio.toFixed(8)} * radius;
   float height = sqrt(radius * radius - distance * distance);
+  thickness = height;
   vec3 position = vec3(local, gap + height);
   vec3 normal = vec3(offset, height) / radius;
   vec3 direction = refract(vec3(0.0, 0.0, -1.0), normal, 1.0 / u_ior);
   traceGlass(position, direction, panel.zw, radius, gap);
   return hitBox(position + vec3(panel.xy, 0.0), direction);
 }
-vec2 seenPoint(vec2 pixel) {
+vec2 seenPoint(vec2 pixel, out float thickness) {
+  thickness = 0.0;
   for (int index = MAX_PANELS - 1; index >= 0; index--) {
     if (index >= u_count) continue;
     vec4 panel = u_panels[index];
     vec2 local = pixel - panel.xy;
     vec2 offset = offsetFromInner(local, panel.zw, u_radii[index]);
-    if (length(offset) < u_radii[index]) return seenThroughPanel(pixel, panel, u_radii[index]);
+    if (length(offset) < u_radii[index]) {
+      return seenThroughPanel(pixel, panel, u_radii[index], thickness);
+    }
   }
   return pixel;
 }
 void main() {
   vec2 pixel = vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y);
-  float value = backgroundAt(seenPoint(pixel));
+  float thickness;
+  float value = backgroundAt(seenPoint(pixel, thickness));
   float position = clamp((value - u_min) / u_range, 0.0, 1.0);
-  outColor = texelFetch(u_palette, ivec2(int(floor(position * 255.0 + 0.5)), 0), 0);
+  float towardWhite = 1.0 - exp(-thickness / u_white_length);
+  int row = int(floor(towardWhite * float(u_rows - 1) + 0.5));
+  outColor = vec4(texelFetch(u_palette, ivec2(int(floor(position * 255.0 + 0.5)), row), 0).rgb, 1.0);
 }`
 
 function compile(gl: WebGL2RenderingContext, type: number, source: string) {
@@ -161,14 +171,14 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string) {
   return shader
 }
 
-function texture(gl: WebGL2RenderingContext, unit: number, internalFormat: number, format: number, bytes: Uint8Array) {
+function texture(gl: WebGL2RenderingContext, unit: number, internalFormat: number, format: number, bytes: Uint8Array, rows = 1) {
   const value = gl.createTexture()
   if (!value) throw new Error('Unable to allocate a scene texture.')
   gl.activeTexture(gl.TEXTURE0 + unit)
   gl.bindTexture(gl.TEXTURE_2D, value)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-  gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, 256, 1, 0, format, gl.UNSIGNED_BYTE, bytes)
+  gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, 256, rows, 0, format, gl.UNSIGNED_BYTE, bytes)
   return value
 }
 
@@ -185,12 +195,12 @@ export function NicrainhaScene() {
     gl.linkProgram(program)
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) ?? 'Unable to link the scene shader.')
     const permutation = buildPermutation(Math.floor(Math.random() * 99999))
-    const palette = generatePalettes(256, paletteOptions)[Math.floor(Math.random() * 256)]
     const permutationTexture = texture(gl, 0, gl.R8UI, gl.RED_INTEGER, permutation)
-    const paletteTexture = texture(gl, 1, gl.RGBA8, gl.RGBA, new Uint8Array(palette.flatMap(({ r, g, b }) => [r, g, b, 255])))
+    const paletteTexture = texture(gl, 1, gl.RGB8, gl.RGB, lightnessRings, rows)
     const uniforms = {
       permutation: gl.getUniformLocation(program, 'u_perm'),
       palette: gl.getUniformLocation(program, 'u_palette'),
+      rows: gl.getUniformLocation(program, 'u_rows'),
       resolution: gl.getUniformLocation(program, 'u_resolution'),
       depth: gl.getUniformLocation(program, 'u_z'),
       minimum: gl.getUniformLocation(program, 'u_min'),
@@ -199,13 +209,13 @@ export function NicrainhaScene() {
       panels: gl.getUniformLocation(program, 'u_panels[0]'),
       radii: gl.getUniformLocation(program, 'u_radii[0]'),
       ior: gl.getUniformLocation(program, 'u_ior'),
-      gapOffset: gl.getUniformLocation(program, 'u_gap_offset'),
+      whiteLength: gl.getUniformLocation(program, 'u_white_length'),
     }
     gl.useProgram(program)
     gl.uniform1i(uniforms.permutation, 0)
     gl.uniform1i(uniforms.palette, 1)
+    gl.uniform1i(uniforms.rows, rows)
     gl.uniform1f(uniforms.ior, glassIor)
-    gl.uniform1f(uniforms.gapOffset, gapOffset * (window.devicePixelRatio || 1))
     const start = performance.now()
     let frame = 0
     const render = (now: number) => {
@@ -242,6 +252,7 @@ export function NicrainhaScene() {
       gl.uniform1i(uniforms.count, elements.length)
       gl.uniform4fv(uniforms.panels, panels)
       gl.uniform1fv(uniforms.radii, radii)
+      gl.uniform1f(uniforms.whiteLength, whiteLengthRem * Number.parseFloat(getComputedStyle(document.documentElement).fontSize) * ratio)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
       frame = requestAnimationFrame(render)
     }
