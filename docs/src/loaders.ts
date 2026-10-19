@@ -48,44 +48,36 @@ function geometryColumn(columns: string[]) {
   return columns.findIndex((column) => ['geom', 'geometry'].includes(column.toLowerCase()))
 }
 
-function readPosition(view: DataView, offset: number, littleEndian: boolean): [Position, number] {
-  return [
-    [view.getFloat64(offset, littleEndian), view.getFloat64(offset + 8, littleEndian)],
-    offset + 16,
-  ]
-}
-
+// Reads WKB (ISO or extended), keeping x and y: Z and M coordinates, when
+// present, are skipped.
 function parseWkb(view: DataView, start: number): [Geometry | null, number] {
   const littleEndian = view.getUint8(start) === 1
   const rawType = view.getUint32(start + 1, littleEndian)
-  const type = rawType & 0xff
-  let offset = start + 5
+  // ISO: 1000 adds Z, 2000 M, 3000 both. Extended: high bits flag Z, M, SRID.
+  const iso = rawType & 0xffff
+  const type = iso % 1000
+  const hasZ = Math.floor(iso / 1000) === 1 || Math.floor(iso / 1000) === 3 || (rawType & 0x80000000) !== 0
+  const hasM = Math.floor(iso / 1000) === 2 || Math.floor(iso / 1000) === 3 || (rawType & 0x40000000) !== 0
+  const stride = 16 + (hasZ ? 8 : 0) + (hasM ? 8 : 0)
+  let offset = start + 5 + ((rawType & 0x20000000) !== 0 ? 4 : 0)
   const count = () => {
     const value = view.getUint32(offset, littleEndian)
     offset += 4
     return value
   }
-  const positions = (length: number) => {
-    const result: Position[] = []
-    for (let index = 0; index < length; index += 1) {
-      const [position, next] = readPosition(view, offset, littleEndian)
-      result.push(position)
-      offset = next
-    }
+  const position = (): Position => {
+    const result: Position = [view.getFloat64(offset, littleEndian), view.getFloat64(offset + 8, littleEndian)]
+    offset += stride
     return result
   }
-  if (type === 1) {
-    const [coordinates, next] = readPosition(view, offset, littleEndian)
-    return [{ type: 'Point', coordinates }, next]
-  }
+  const positions = (length: number) => Array.from({ length }, position)
+  if (type === 1) return [{ type: 'Point', coordinates: position() }, offset]
   if (type === 2) return [{ type: 'LineString', coordinates: positions(count()) }, offset]
-  if (type === 3) {
-    const rings = Array.from({ length: count() }, () => positions(count()))
-    return [{ type: 'Polygon', coordinates: rings }, offset]
-  }
+  if (type === 3) return [{ type: 'Polygon', coordinates: Array.from({ length: count() }, () => positions(count())) }, offset]
   if (type === 4 || type === 5 || type === 6) {
     const children: Geometry[] = []
-    for (let index = 0; index < count(); index += 1) {
+    const parts = count()
+    for (let index = 0; index < parts; index += 1) {
       const [child, next] = parseWkb(view, offset)
       offset = next
       if (child) children.push(child)
@@ -104,27 +96,26 @@ function parseGeoPackageGeometry(value: Uint8Array): Geometry | null {
   return parseWkb(new DataView(value.buffer, value.byteOffset, value.byteLength), 8 + envelopeBytes)[0]
 }
 
-export async function parseGeoPackage(file: File): Promise<DataTable> {
+async function parseGeoPackage(file: File): Promise<Omit<DataTable, 'filename'>> {
   const SQL = await initSqlJs({ locateFile: () => wasmUrl })
   const database = new SQL.Database(new Uint8Array(await file.arrayBuffer()))
   try {
     const contents = database.exec(
       "SELECT table_name, srs_id FROM gpkg_contents WHERE data_type = 'features' ORDER BY table_name",
     )[0]
-    if (!contents || contents.values.length === 0) throw new Error('No feature layer was found in this GeoPackage.')
-    if (contents.values.length > 1) throw new Error('GeoPackages with multiple feature layers are not supported.')
+    if (!contents || contents.values.length === 0) throw new Error(`${file.name}: no feature layer was found.`)
+    if (contents.values.length > 1) throw new Error(`${file.name}: GeoPackages with several feature layers are not supported.`)
     const [tableName, srsId] = contents.values[0]
     const escapedName = String(tableName).replaceAll('"', '""')
     const result = database.exec(`SELECT * FROM "${escapedName}"`)[0]
-    if (!result) throw new Error('The GeoPackage layer has no rows.')
+    if (!result) throw new Error(`${file.name}: the layer has no rows.`)
     const index = geometryColumn(result.columns)
-    if (index < 0) throw new Error('The GeoPackage layer has no geom or geometry column.')
+    if (index < 0) throw new Error(`${file.name}: the layer has no geom or geometry column.`)
     const columns = result.columns.filter((column, columnIndex) => columnIndex !== index && column.toLowerCase() !== 'fid')
     const rows = result.values.map((row) =>
       Object.fromEntries(columns.map((column) => [column, row[result.columns.indexOf(column)] as Cell])),
     )
     return {
-      filename: file.name,
       columns,
       rows,
       geometries: result.values.map((row) => {
@@ -138,15 +129,9 @@ export async function parseGeoPackage(file: File): Promise<DataTable> {
   }
 }
 
-export async function parseFile(file: File): Promise<DataTable> {
-  if (file.name.toLowerCase().endsWith('.gpkg')) return parseGeoPackage(file)
-  if (file.name.toLowerCase().endsWith('.csv')) {
-    const parsed = parseCsv(await file.text())
-    return { filename: file.name, ...parsed }
-  }
-  throw new Error(`${file.name}: only CSV and GeoPackage files are supported.`)
-}
-
-export function tableByName(tables: DataTable[], filename: string) {
-  return tables.find((table) => table.filename.toLowerCase() === filename.toLowerCase())
+// Reads `file` as the NetSy file `name`, whatever the file itself is called:
+// its format is the one `name` expects.
+export async function parseFile(file: File, name: string): Promise<DataTable> {
+  const table = name.endsWith('.gpkg') ? await parseGeoPackage(file) : parseCsv(await file.text())
+  return { ...table, filename: name }
 }

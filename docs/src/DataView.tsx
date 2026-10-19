@@ -1,0 +1,95 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { BUBBLE, layoutCircuit } from './circuit'
+import { titleCase } from './files'
+import { background, onFrame } from './scene/frames'
+import { Pan } from './scene/pan'
+import type { DataTable } from './types'
+
+// The data-flow graph: one bubble per NetSy file, wired top to bottom as a
+// circuit that fits the window's width and scrolls vertically, fading under
+// the banner. A loaded file opens its table; any other file asks for it.
+
+const pan = new Pan()
+
+export function DataView({ tables, active, onMap, onLoad, onOpen }: {
+  tables: Record<string, DataTable>
+  active: boolean
+  onMap: () => void
+  onLoad: (name: string, file: File) => void
+  onOpen: (name: string) => void
+}) {
+  const region = useRef<HTMLDivElement>(null)
+  const world = useRef<HTMLDivElement>(null)
+  const picker = useRef<HTMLInputElement>(null)
+  const target = useRef('')
+  const [width, setWidth] = useState(0)
+  const [tip, setTip] = useState<{ name: string; x: number; y: number } | null>(null)
+  const circuit = useMemo(() => (width ? layoutCircuit(width) : null), [width])
+
+  useEffect(() => {
+    const element = region.current
+    if (!element) return
+    const observer = new ResizeObserver(() => setWidth(element.clientWidth))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const element = region.current
+    if (!element || !circuit) return
+    pan.setBounds(() => ({ minX: 0, maxX: 0, minY: 0, maxY: circuit.height - element.clientHeight }))
+    const detach = pan.attach(element)
+    const stop = onFrame((dt) => {
+      const moved = pan.step(dt)
+      if (moved && world.current) world.current.style.transform = `translateY(${-pan.y}px)`
+      background.y = pan.y
+      if (moved) setTip(null)
+      return moved
+    })
+    return () => {
+      detach()
+      stop()
+    }
+  }, [circuit])
+
+  const choose = (name: string) => {
+    if (tables[name]) return onOpen(name)
+    target.current = name
+    const input = picker.current!
+    input.accept = name.endsWith('.gpkg') ? '.gpkg' : '.csv'
+    input.value = ''
+    input.click()
+  }
+
+  return (
+    <section className="view data-view" inert={!active}>
+      <header className="banner">
+        <button type="button" className="bubble glass" data-glass onClick={onMap}>Map</button>
+      </header>
+      <div className="data-region" ref={region} data-glass-clip tabIndex={0} aria-label="NetSy data files">
+        {circuit && <div className="circuit" ref={world} style={{ height: circuit.height }}>
+          <svg className="wires" width={circuit.width} height={circuit.height} aria-hidden="true">
+            {circuit.wires.map((wire, index) => <line key={index} {...wire} />)}
+            {circuit.dots.map((dot, index) => <circle key={index} cx={dot.x} cy={dot.y} r={3} />)}
+          </svg>
+          {circuit.nodes.map((node) => (
+            <button key={node.id} type="button" className={`file glass ${tables[node.id] ? 'loaded' : ''}`} data-glass
+              style={{ left: node.x, top: node.y, width: BUBBLE.width, height: BUBBLE.height }}
+              aria-label={`${titleCase(node.id)} (${node.id})`} onClick={() => choose(node.id)}>
+              <span onPointerEnter={(event) => {
+                const box = event.currentTarget.getBoundingClientRect()
+                setTip({ name: node.id, x: box.left + box.width / 2, y: box.top })
+              }} onPointerLeave={() => setTip(null)}>{titleCase(node.id)}</span>
+            </button>
+          ))}
+        </div>}
+      </div>
+      <input ref={picker} type="file" hidden onChange={(event) => {
+        const file = event.target.files?.[0]
+        if (file) onLoad(target.current, file)
+      }} />
+      {tip && createPortal(<span className="tooltip" style={{ left: tip.x, top: tip.y }} role="tooltip">{tip.name}</span>, document.body)}
+    </section>
+  )
+}

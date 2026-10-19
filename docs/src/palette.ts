@@ -1,16 +1,11 @@
-import { generatePalettes } from 'nicrainha'
-import { defaultLightness } from './lightnessRings'
+import { DEFAULT_LIGHTNESS, generatePalettes } from 'nicrainha'
 import type { PaletteColor } from './types'
 
+// Data drawn on white (the map and table sheets) uses nicrainha's default
+// lightness, independently of the scene's: it is the most saturated circle.
+// A ramp walks half the circle, so its two ends stay distinguishable.
 const rotation = 37
-const lightnessParameter = new URLSearchParams(window.location.search).get('lightness')
-const requestedLightness = lightnessParameter === null ? Number.NaN : Number(lightnessParameter)
-export const backgroundLightness = Number.isFinite(requestedLightness) && requestedLightness >= 0 && requestedLightness <= 100
-  ? requestedLightness
-  : defaultLightness
-export const paletteOptions = { lightness: backgroundLightness }
-export const continuousPalette = generatePalettes(256, paletteOptions)[rotation] as PaletteColor[]
-export const categoricalPalette = generatePalettes(12, paletteOptions)[rotation] as PaletteColor[]
+export const ramp = (generatePalettes(256, { lightness: DEFAULT_LIGHTNESS })[rotation] as PaletteColor[]).slice(0, 128)
 
 export function cssColor(color: PaletteColor, alpha = 1) {
   return `rgb(${color.r} ${color.g} ${color.b} / ${alpha})`

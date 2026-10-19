@@ -15,13 +15,9 @@ export interface DataTable {
   columns: string[]
   rows: Record<string, Cell>[]
   geometries?: (Geometry | null)[]
+  // The map's buffers for this file's geometry, prepared while it loaded.
+  prepared?: import('./map/geometry').Prepared | null
   srsId?: number
-}
-
-export interface ValueFeature {
-  geometry: Geometry
-  value: number | null
-  label: string
 }
 
 export interface PaletteColor {

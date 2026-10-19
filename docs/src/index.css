@@ -1,13 +1,21 @@
+*, *::before, *::after { box-sizing: border-box; }
 :root {
-  color: #000;
-  background: #000;
+  --radius: 28px;
+  --gutter: clamp(16px, 3vw, 32px);
+  --banner-top: 20px;
+  --banner: 56px;
+  --below-banner: calc(var(--banner-top) + var(--banner) + 20px);
+  --fade: 36px;
+  --paper: #dcdcdc;
   font-family: Comfortaa, ui-sans-serif, system-ui, sans-serif;
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  color: #111;
+  background: var(--paper);
+  color-scheme: light;
 }
-
-* { box-sizing: border-box; }
-html, body, #root { width: 100%; height: 100%; min-width: 320px; margin: 0; overflow: hidden; }
-button, input, select { font: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: .4; }
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }

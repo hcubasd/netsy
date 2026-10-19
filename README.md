@@ -20,8 +20,8 @@ Requires Python 3.11 or newer.
 ## Visualizer
 
 `docs/` is a self-contained TypeScript visualizer for NetSy's CSV and GeoPackage files.
-It runs entirely in the browser: select or drop local synthesis files to inspect the WebGL
-map, animated pipeline diagram, and data tables without uploading data to a service.
+It runs entirely in the browser: a map of the loaded geometries, the data-flow graph of every
+file NetSy reads and writes (where files are loaded), and their tables. No data is uploaded.
 
 ```sh
 cd docs

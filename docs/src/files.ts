@@ -1,0 +1,41 @@
+// The files NetSy reads and writes, and the `netsy synth` commands that turn
+// some of them into others (src/netsy/cli/main.py).
+
+export interface Command {
+  name: string
+  inputs: string[]
+  outputs: string[]
+  // Read only when asked (`--transactions`).
+  optional?: string[]
+}
+
+export const commands: Command[] = [
+  { name: 'supply', inputs: ['supply_effects.csv', 'supply_thresholds.csv'], outputs: ['supply.csv'] },
+  { name: 'demand', inputs: ['demand_effects.csv', 'demand_thresholds.csv'], outputs: ['demand.csv'] },
+  { name: 'capacities', inputs: ['capacity_effects.csv', 'capacity_thresholds.csv'], outputs: ['capacities.csv'] },
+  { name: 'needs', inputs: ['need_effects.csv', 'need_thresholds.csv'], outputs: ['needs.csv'] },
+  { name: 'agents', inputs: ['supply.csv', 'demand.csv', 'capacities.csv', 'needs.csv', 'zones.gpkg'], outputs: ['agents.gpkg'] },
+  { name: 'desire-lines', inputs: ['agents.gpkg'], outputs: ['desire_lines.gpkg'] },
+  { name: 'od-flows', inputs: ['productions.csv', 'attractions.csv', 'od_prior.csv'], outputs: ['od_flows.csv'] },
+  { name: 'facility-chains', inputs: ['desire_lines.gpkg', 'facilities.gpkg', 'facility_chain_steps.csv'], outputs: ['transaction_legs.gpkg'] },
+  {
+    name: 'network-loads',
+    inputs: [
+      'network.gpkg', 'desire_lines.gpkg', 'departures.csv', 'time_intervals.csv', 'dwell_times.csv', 'vehicles.csv',
+      'vehicle_velocities.csv', 'vehicle_capacities.csv', 'road_capacities.csv', 'alternative_specific_constants.csv',
+    ],
+    optional: ['transaction_legs.gpkg'],
+    outputs: ['network_loads.csv'],
+  },
+  {
+    name: 'network-emissions',
+    inputs: ['network_loads.csv', 'network.gpkg', 'vehicles.csv', 'copert_v_coefficients.csv', 'emission_factors.csv'],
+    outputs: ['network_emissions.csv'],
+  },
+]
+
+const acronyms: Record<string, string> = { od: 'OD', copert: 'COPERT', v: 'V' }
+
+// "od_prior.csv" → "OD Prior".
+export const titleCase = (filename: string) =>
+  filename.replace(/\.[^.]+$/, '').split('_').map((word) => acronyms[word] ?? word[0].toUpperCase() + word.slice(1)).join(' ')
