@@ -1,10 +1,11 @@
-import { commands } from './files'
+import { commands, standalone } from './files'
 
 // The data-flow graph as a top-down circuit. Every file is a bubble of the
 // same size on a grid of columns that fits the available width. Files that a
 // command makes are placed in order, each in the first row below all of its
 // inputs; the files nothing makes are placed just in time, in the rows
-// directly above the first file made from them. A row may mix stages.
+// directly above the first file made from them, and files no command
+// touches start the first row. A row may mix stages.
 //
 // Wires run only through the empty space of the grid: horizontal channels
 // between rows and vertical gaps between columns, so no wire crosses a
@@ -151,6 +152,12 @@ export function layoutCircuit(available: number): Circuit {
       }
     }
     for (let index = rows.length - 1; index >= 0; index--) if (!rows[index].length) rows.splice(index, 1)
+    // Files no command touches go in the first row, or a row of their own
+    // above it.
+    for (const file of standalone) {
+      if (rows[0] && rows[0].length < columns) rows[0].push(file)
+      else rows.unshift([file])
+    }
     const row = new Map<string, number>()
     rows.forEach((files, index) => files.forEach((file) => row.set(file, index)))
 

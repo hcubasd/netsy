@@ -10,11 +10,6 @@ export interface Command {
 }
 
 export const commands: Command[] = [
-  { name: 'supply', inputs: ['supply_effects.csv', 'supply_thresholds.csv'], outputs: ['supply.csv'] },
-  { name: 'demand', inputs: ['demand_effects.csv', 'demand_thresholds.csv'], outputs: ['demand.csv'] },
-  { name: 'capacities', inputs: ['capacity_effects.csv', 'capacity_thresholds.csv'], outputs: ['capacities.csv'] },
-  { name: 'needs', inputs: ['need_effects.csv', 'need_thresholds.csv'], outputs: ['needs.csv'] },
-  { name: 'agents', inputs: ['supply.csv', 'demand.csv', 'capacities.csv', 'needs.csv', 'zones.gpkg'], outputs: ['agents.gpkg'] },
   { name: 'desire-lines', inputs: ['agents.gpkg'], outputs: ['desire_lines.gpkg'] },
   { name: 'od-flows', inputs: ['productions.csv', 'attractions.csv', 'od_prior.csv'], outputs: ['od_flows.csv'] },
   { name: 'facility-chains', inputs: ['desire_lines.gpkg', 'facilities.gpkg', 'facility_chain_steps.csv'], outputs: ['transaction_legs.gpkg'] },
@@ -33,6 +28,9 @@ export const commands: Command[] = [
     outputs: ['network_emissions.csv'],
   },
 ]
+
+// Files no command reads or writes, which the map still draws.
+export const standalone = ['zones.gpkg']
 
 const acronyms: Record<string, string> = { od: 'OD', copert: 'COPERT', v: 'V' }
 

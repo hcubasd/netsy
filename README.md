@@ -4,10 +4,10 @@ NetSy is a general spatial resource-flow synthesizer. It turns case-specific act
 facility, vehicle, timing, network, and emissions evidence into explicit transactions,
 capacity-constrained movements, directional link loads, and emissions.
 
-The built-in ordered-logit profile synthesizes supply, demand, capacities, needs, and
-agents. Its direct provider-to-consumer transactions are also a useful baseline for a
-broader model: observed shipments, balanced OD flows, parcel demand, service trips, and
-facility-mediated chains can use the same transaction, tour, network, and emissions core.
+NetSy starts from actors and the transactions between them, observed or synthesized:
+observed shipments, provider-to-consumer matches, balanced OD flows, parcel demand,
+service trips, and facility-mediated chains all use the same transaction, tour, network,
+and emissions core.
 
 ## Install
 
@@ -37,11 +37,6 @@ on the local network. Its production output is static and is built with `npm run
 Run each command in the directory holding its input files.
 
 ```
-netsy synth supply       # supply_effects.csv + supply_thresholds.csv -> supply.csv
-netsy synth demand       # demand_effects.csv + demand_thresholds.csv -> demand.csv
-netsy synth capacities   # capacity_effects.csv + capacity_thresholds.csv -> capacities.csv
-netsy synth needs        # need_effects.csv + need_thresholds.csv -> needs.csv
-netsy synth agents --seed 1       # supply/demand/capacities/needs + zones.gpkg -> agents.gpkg
 netsy synth desire-lines --seed 1 # agents.gpkg -> desire_lines.gpkg
 netsy synth od-flows               # production/attraction marginals + OD prior -> od_flows.csv
 netsy synth facility-chains        # direct transactions + facilities -> transaction_legs.gpkg
@@ -50,7 +45,7 @@ netsy synth network-emissions      # network loads + COPERT inputs -> network_em
 ```
 
 An existing output file is only replaced with `--force`.
-`agents`, `desire-lines`, and `network-loads` make random draws; pass `--seed` to reproduce them.
+`desire-lines` and `network-loads` make random draws; pass `--seed` to reproduce them.
 
 `network-loads` reads `desire_lines.gpkg` by default. Pass
 `--transactions transaction_legs.gpkg` to route facility-mediated transaction legs instead:
@@ -66,7 +61,7 @@ configures it.
 
 | General model object | Role | Examples of case-specific sources |
 |---|---|---|
-| Actors | Produce, consume, carry, or transform resources. | Establishment register, household survey, or the ordered-logit agent profile. |
+| Actors | Produce, consume, carry, or transform resources. | Establishment register, household survey, an operator's records, or firm synthesis. |
 | Facilities | Locations with explicit operational roles and throughput constraints. | Depot, UCC, consolidation centre, microhub, hospital, transfer station. |
 | Transactions | Quantified origin-to-destination commitments with stable endpoint identities. | Observed shipment, balanced OD flow, parcel order, or capacity/need match. |
 | Transaction legs | A direct transaction or ordered legs through facilities. | Supplier → UCC → customer; depot → microhub → low-emission-zone recipient. |
@@ -80,47 +75,11 @@ to the general core.
 
 ## Data files
 
-`*_effects.csv` holds one additive effect per stratum value and resource. `zone_id` is always a stratum. An empty cell means the stratum value does not take part in that resource.
-
-| stratum | stratum_value | resource_1 | resource_2 |
-|---|---|---|---|
-| zone_id | 1 | -1.347 | -0.813 |
-| zone_id | 2 | 1.494 | 1.546 |
-| stratum_1 | value_1 | -0.627 | 0.398 |
-| stratum_1 | value_2 | -0.191 | 0.078 |
-| stratum_2 | value_1 | -0.204 | -1.179 |
-| stratum_2 | value_2 | -2.511 | 0.471 |
-
-`*_thresholds.csv` holds the sorted cutpoints of each resource. The largest level has none.
-
-| resource | resource_level | threshold |
-|---|---|---|
-| resource_1 | 0 | 0.432 |
-| resource_1 | 2 | 1.738 |
-| resource_1 | 3 | |
-| resource_2 | 4 | -0.220 |
-| resource_2 | 9 | |
-
-`supply.csv` and `demand.csv` have one row per stratum combination and one column per resource.
-
-| zone_id | stratum_1 | stratum_2 | resource_1 | resource_2 |
-|---|---|---|---|---|
-| 1 | value_1 | value_1 | 0 | 5 |
-| 1 | value_1 | value_2 | 0 | 7 |
-| 1 | value_2 | value_1 | 0 | 5 |
-
-`capacities.csv` and `needs.csv` have one row per stratum combination, resource and level.
-
-| zone_id | stratum_1 | stratum_2 | resource | resource_level | probability |
-|---|---|---|---|---|---|
-| 1 | value_1 | value_1 | resource_1 | 0 | 0.9315 |
-| 1 | value_1 | value_1 | resource_1 | 2 | 0.0490 |
-| 1 | value_1 | value_1 | resource_1 | 3 | 0.0195 |
-| 1 | value_1 | value_1 | resource_2 | 4 | 0.7980 |
-| 1 | value_1 | value_1 | resource_2 | 9 | 0.2020 |
-
-`agents.gpkg` contains an `agent_id`, its stratum columns, `{resource}_capacity` and
-`{resource}_need` columns, and point geometry. `desire_lines.gpkg` contains one direct
+`agents.gpkg` holds the actors: an `agent_id`, a `{resource}_capacity` and a
+`{resource}_need` column for every resource (whole numbers; an empty cell means the agent
+does not take part in that resource), any other attributes, and point geometry. It may come
+from any source, such as a register, an operator's records, or a firm-synthesis adapter.
+`desire_lines.gpkg` contains one direct
 provider-to-consumer transaction per row. It preserves both endpoints as identities;
 geometry is its spatial representation, not its only identity.
 
@@ -217,8 +176,8 @@ distance and count; no unsupported speed relationship is invented.
 
 ## Canonical extension path
 
-The ordered-logit profile is intentionally not the only way to create transactions. NetSy's
-general core is designed to accept additional, explicitly calibrated scenario adapters:
+Actors and transactions can come from any source. NetSy's general core is designed to
+accept explicitly calibrated scenario adapters:
 
 1. actor/facility population synthesis or observed registers;
 2. production/attraction, gravity, and IPF/Furness OD balancing;
@@ -236,7 +195,7 @@ tour heuristic, assignment model, emissions factors, or stochastic stream.
 ### Balanced OD flows
 
 `od-flows` provides the canonical doubly constrained IPF/Furness (also called FRATAR)
-stage. It is independent of the ordered-logit agent profile and writes fractional resource
+stage. It is independent of agents and writes fractional resource
 flows that a case-specific shipment or transaction adapter can subsequently discretize.
 It reads:
 
@@ -254,25 +213,8 @@ residual flows.
 
 ## Model
 
-Each resource $r$ is an ordinal outcome under a cumulative-logit model, with $\sigma(x) = 1 / (1 + e^{-x})$. A stratum $s = (v_1, \dots, v_D)$ takes one value from each of the $D$ dimensions, and its linear predictor is the sum of the effects $\gamma$ of those values:
-
-$$\beta_{r,s} = \sum_{d=1}^{D} \gamma_{r,d,v_d}$$
-
-If any of these effects is empty the pair $(s, r)$ is omitted, which is not the same as an effect of zero. With levels $\ell_{r,1} < \dots < \ell_{r,K_r}$ and thresholds $\mu_{r,1} \le \dots \le \mu_{r,K_r-1}$, the cumulative probability of level $k$ is
-
-$$F_{r,s}(k) = \sigma(\mu_{r,k} - \beta_{r,s})$$
-
-with $F_{r,s}(0) = 0$ and $F_{r,s}(K_r) = 1$, and the probability of each level is the difference
-
-$$p_{r,s}(\ell_{r,k}) = F_{r,s}(k) - F_{r,s}(k-1)$$
-
-Capacities and needs are these probabilities. Supply and demand are the expected level rounded to a whole unit:
-
-$$A_{r,s} = \mathrm{round}\left( \sum_{k=1}^{K_r} \ell_{r,k} p_{r,s}(\ell_{r,k}) \right)$$
-
-Agents are sampled independently from their stratum's capacity and need distributions while
-remaining aggregate supply and demand permit. Desire lines then match each resource's
-providers to consumers by remaining quantity and distance-weighted proximity.
+Desire lines match each resource's providers to consumers by remaining quantity and
+distance-weighted proximity.
 
 Network loads apportion each resource's transaction total exactly across departure
 intervals. Within an interval, NetSy draws a provider and seed consumer from residual
@@ -285,5 +227,4 @@ away the changing payload of a multi-stop tour.
 Network emissions use each load row's vehicle type, velocity, directed grade, and payload
 to evaluate the corresponding COPERT V hot-exhaust factor. Non-exhaust emissions are
 separate, velocity-independent g/km factors. Both sources scale their factor by directional
-link distance and vehicle count. See [`netsy-report`](https://github.com/hcubasd/netsy-report)
-for the complete equations and file-shape appendix.
+link distance and vehicle count.

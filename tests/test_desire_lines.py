@@ -3,7 +3,7 @@ import numpy as np
 from shapely.geometry import Point
 
 from netsy.synth.desire_lines import desire_lines
-from tests.agent_fixtures import CRS
+from tests.fixtures import CRS
 
 
 def _agents(rows):

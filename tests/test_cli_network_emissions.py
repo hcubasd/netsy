@@ -4,7 +4,7 @@ import pytest
 from shapely.geometry import LineString
 
 from netsy.cli.main import main
-from tests.agent_fixtures import CRS
+from tests.fixtures import CRS
 
 
 @pytest.fixture(autouse=True)

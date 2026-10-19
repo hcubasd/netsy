@@ -6,7 +6,7 @@ import type { Cell, DataTable } from './types'
 
 // The map: NetSy's geometries, colored by a measure, in a white square.
 
-type Layer = 'zones' | 'supply' | 'demand' | 'capacities' | 'needs' | 'agents' | 'desire' | 'grade' | 'loads' | 'emissions'
+type Layer = 'zones' | 'agents' | 'desire' | 'grade' | 'loads' | 'emissions'
 
 interface LayerSpec {
   label: string
@@ -14,15 +14,10 @@ interface LayerSpec {
   data?: string
   key: string
   direct?: boolean
-  expectedValue?: boolean
 }
 
 const LAYERS: Record<Layer, LayerSpec> = {
   zones: { label: 'Zones', geometry: 'zones.gpkg', key: 'zone_id', direct: true },
-  supply: { label: 'Zones · supply', geometry: 'zones.gpkg', data: 'supply.csv', key: 'zone_id' },
-  demand: { label: 'Zones · demand', geometry: 'zones.gpkg', data: 'demand.csv', key: 'zone_id' },
-  capacities: { label: 'Zones · capacities', geometry: 'zones.gpkg', data: 'capacities.csv', key: 'zone_id', expectedValue: true },
-  needs: { label: 'Zones · needs', geometry: 'zones.gpkg', data: 'needs.csv', key: 'zone_id', expectedValue: true },
   agents: { label: 'Agents', geometry: 'agents.gpkg', key: 'agent_id', direct: true },
   desire: { label: 'Desire lines', geometry: 'desire_lines.gpkg', key: 'origin_agent_id', direct: true },
   grade: { label: 'Network · grade', geometry: 'network.gpkg', key: 'link_id', direct: true },
@@ -36,8 +31,7 @@ const label = (value: string) => value.replaceAll('_', ' ').replace(/^\w/, (lett
 const valueString = (value: Cell | undefined) => value === null || value === undefined ? '' : String(value)
 
 function valuesFor(table: DataTable, layer: LayerSpec) {
-  if (layer.expectedValue) return ['expected_value']
-  const excluded = new Set([...dimensions, 'forward', layer.key, 'resource_level'])
+  const excluded = new Set([...dimensions, 'forward', layer.key])
   return table.columns.filter((column) => !excluded.has(column) && !/(^|_)id$/.test(column) && table.rows.some((row) => numeric(row[column])))
 }
 
@@ -54,13 +48,7 @@ function rowValues(geometry: DataTable, source: DataTable, layer: LayerSpec, mea
   for (const row of source.rows) {
     if (!dimensions.every((dimension) => (filters[dimension] ?? 'all') === 'all' || !source.columns.includes(dimension) || valueString(row[dimension]) === filters[dimension])) continue
     const key = valueString(row[layer.key])
-    let amount: number | null = null
-    if (layer.expectedValue) {
-      if (numeric(row.probability) && numeric(row.resource_level)) amount = Number(row.probability) * Number(row.resource_level)
-    } else if (numeric(row[measure])) {
-      amount = row[measure] as number
-    }
-    if (key && amount !== null) byKey.set(key, (byKey.get(key) ?? 0) + amount)
+    if (key && numeric(row[measure])) byKey.set(key, (byKey.get(key) ?? 0) + (row[measure] as number))
   }
   geometry.rows.forEach((row, index) => { values[index] = byKey.get(valueString(row[layer.key])) ?? Number.NaN })
   return values

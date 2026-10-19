@@ -8,7 +8,7 @@ from shapely.geometry import Point
 
 from netsy.cli.main import main
 from netsy.synth.facility_chains import facility_chains
-from tests.agent_fixtures import CRS
+from tests.fixtures import CRS
 
 
 @pytest.fixture(autouse=True)
