@@ -16,9 +16,17 @@ SYNTH_COMMANDS = {
         "netsy.cli.synth_desire_lines",
         "agents.gpkg -> desire_lines.gpkg",
     ),
+    "facility-chains": (
+        "netsy.cli.synth_facility_chains",
+        "desire_lines.gpkg + facilities.gpkg + facility_chain_steps.csv -> transaction_legs.gpkg",
+    ),
+    "od-flows": (
+        "netsy.cli.synth_od_flows",
+        "productions.csv + attractions.csv + od_prior.csv -> od_flows.csv",
+    ),
     "network-loads": (
         "netsy.cli.synth_network_loads",
-        "network.gpkg + desire_lines.gpkg + supporting CSVs -> network_loads.csv",
+        "network.gpkg + transaction lines + supporting CSVs -> network_loads.csv",
     ),
     "network-emissions": (
         "netsy.cli.synth_network_emissions",
@@ -37,6 +45,12 @@ def build_parser():
         command.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
         if name in {"agents", "desire-lines", "network-loads"}:
             command.add_argument("--seed", type=int, help="seed the random draws, so the same inputs give the same output")
+        if name == "network-loads":
+            command.add_argument(
+                "--transactions",
+                metavar="PATH",
+                help="transaction-line GeoPackage; defaults to desire_lines.gpkg",
+            )
         command.set_defaults(module=module)
     return parser
 
@@ -46,4 +60,6 @@ def main(argv=None):
     options = {"force": args.force}
     if hasattr(args, "seed"):
         options["seed"] = args.seed
+    if hasattr(args, "transactions"):
+        options["transactions"] = args.transactions
     return importlib.import_module(args.module).run(**options)

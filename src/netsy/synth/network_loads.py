@@ -119,7 +119,11 @@ def _shipments(desire_lines):
             "origin": start,
             "destinations": [],
         })
-        shipment["destinations"].append({"point": end, "remaining": int(line["quantity"])})
+        shipment["destinations"].append({
+            "point": end,
+            "agent_id": line.get("destination_agent_id"),
+            "remaining": int(line["quantity"]),
+        })
     return list(shipments.values())
 
 

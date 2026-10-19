@@ -29,6 +29,7 @@ def desire_lines(agents, rng):
     ys = [point.y for point in points.values()]
     scale = math.hypot(max(xs) - min(xs), max(ys) - min(ys)) or 1.0
     rows = []
+    transaction_id = 0
 
     for resource in _resources(agents):
         capacities = dict(zip(agent_ids, agents[f"{resource}_capacity"]))
@@ -62,15 +63,21 @@ def desire_lines(agents, rng):
                 capacities[provider] -= quantity
                 needs[consumer] -= quantity
                 rows.append({
+                    "transaction_id": transaction_id,
                     "resource": resource,
                     "quantity": quantity,
                     "origin_agent_id": provider,
+                    "destination_agent_id": consumer,
                     "geometry": LineString([points[provider].coords[0], points[consumer].coords[0]]),
                 })
+                transaction_id += 1
 
     return geopandas.GeoDataFrame(
         rows,
-        columns=["resource", "quantity", "origin_agent_id", "geometry"],
+        columns=[
+            "transaction_id", "resource", "quantity", "origin_agent_id",
+            "destination_agent_id", "geometry",
+        ],
         geometry="geometry",
         crs=agents.crs,
     )

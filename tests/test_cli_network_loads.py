@@ -4,8 +4,10 @@ import geopandas
 import pandas as pd
 import pytest
 from shapely.geometry import LineString
+from shapely.geometry import Point
 
 from netsy.cli.main import main
+from netsy.synth.facility_chains import facility_chains
 from tests.agent_fixtures import CRS
 
 
@@ -61,3 +63,36 @@ def test_dwell_times_rejects_removed_return_load(capsys):
     pd.DataFrame([["parcels", 0.0, 0.5]], columns=["resource", "dwell_time", "load_pct"]).to_csv("dwell_times.csv", index=False)
     assert main(["synth", "network-loads"]) == 1
     assert "'load_pct' was removed" in capsys.readouterr().err
+
+
+def test_uses_explicit_transaction_legs_path():
+    _write_inputs()
+    transactions = geopandas.read_file("desire_lines.gpkg")
+    transactions["transaction_id"] = [1, 2]
+    transactions["destination_agent_id"] = [2, 3]
+    transactions.to_file("transaction_legs.gpkg", driver="GPKG")
+    assert main([
+        "synth", "network-loads", "--transactions", "transaction_legs.gpkg", "--seed", "1",
+    ]) == 0
+    assert os.path.exists("network_loads.csv")
+
+
+def test_routes_legs_created_by_a_facility_chain():
+    _write_inputs()
+    transactions = geopandas.read_file("desire_lines.gpkg").iloc[[1]].copy()
+    transactions["transaction_id"] = ["shipment-1"]
+    transactions["destination_agent_id"] = ["customer"]
+    facilities = geopandas.GeoDataFrame(
+        {"facility_id": ["hub"], "facility_type": ["microhub"], "capacity": [2]},
+        geometry=[Point(1, 0)],
+        crs=CRS,
+    )
+    facility_chains(
+        transactions,
+        facilities,
+        pd.DataFrame({"transaction_id": ["shipment-1"], "sequence": [1], "facility_id": ["hub"]}),
+    ).to_file("transaction_legs.gpkg", driver="GPKG")
+    assert main([
+        "synth", "network-loads", "--transactions", "transaction_legs.gpkg", "--seed", "1",
+    ]) == 0
+    assert set(pd.read_csv("network_loads.csv")["link_id"]) == {0, 1}

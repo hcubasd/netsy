@@ -13,7 +13,6 @@ from netsy.synth.network_loads import network_loads
 
 _INPUTS = {
     "network.gpkg": ("link_id", "grade", "road_type", "oneway"),
-    "desire_lines.gpkg": ("resource", "quantity", "origin_agent_id"),
     "departures.csv": ("resource", "time_interval", "probability"),
     "time_intervals.csv": ("time_interval", "duration"),
     "dwell_times.csv": ("resource", "dwell_time"),
@@ -23,6 +22,7 @@ _INPUTS = {
     "road_capacities.csv": ("road_type", "capacity"),
     "alternative_specific_constants.csv": ("vehicle", "resource", "alternative_specific_constant"),
 }
+_TRANSACTION_COLUMNS = ("resource", "quantity", "origin_agent_id")
 
 _OUTPUT_COLUMNS = [
     "link_id", "time_interval", "resource", "vehicle", "forward", "vehicle_count", "velocity", "load_pct",
@@ -46,22 +46,29 @@ def _require(frame, path):
         raise ValueError(f"{path}: missing columns {missing}")
 
 
-def _validate(frames):
+def _validate(frames, transaction_path):
     for path, frame in frames.items():
+        if path == "transactions":
+            continue
         _require(frame, path)
+    transactions = frames["transactions"]
+    missing = [column for column in _TRANSACTION_COLUMNS if column not in transactions.columns]
+    if missing:
+        raise ValueError(f"{transaction_path}: missing columns {missing}")
     if "load_pct" in frames["dwell_times.csv"].columns:
         raise ValueError("dwell_times.csv: 'load_pct' was removed; returns are empty")
-    network, desire_lines = frames["network.gpkg"], frames["desire_lines.gpkg"]
-    if network.crs is None or desire_lines.crs is None or network.crs != desire_lines.crs:
-        raise ValueError("network.gpkg and desire_lines.gpkg: both need the same CRS")
+    network = frames["network.gpkg"]
+    if network.crs is None or transactions.crs is None or network.crs != transactions.crs:
+        raise ValueError(f"network.gpkg and {transaction_path}: both need the same CRS")
     if network.geometry.isna().any() or not network.geometry.geom_type.eq("LineString").all():
         raise ValueError("network.gpkg: every geometry must be a line")
-    if desire_lines.geometry.isna().any() or not desire_lines.geometry.geom_type.eq("LineString").all():
-        raise ValueError("desire_lines.gpkg: every geometry must be a line")
+    if transactions.geometry.isna().any() or not transactions.geometry.geom_type.eq("LineString").all():
+        raise ValueError(f"{transaction_path}: every geometry must be a line")
     if network["link_id"].duplicated().any():
         raise ValueError("network.gpkg: 'link_id' values must be unique")
-    if (pd.to_numeric(desire_lines["quantity"], errors="coerce").isna() | (pd.to_numeric(desire_lines["quantity"], errors="coerce") <= 0) | (pd.to_numeric(desire_lines["quantity"], errors="coerce") % 1 != 0)).any():
-        raise ValueError("desire_lines.gpkg: 'quantity' must contain positive whole numbers")
+    quantities = pd.to_numeric(transactions["quantity"], errors="coerce")
+    if (quantities.isna() | (quantities <= 0) | (quantities % 1 != 0)).any():
+        raise ValueError(f"{transaction_path}: 'quantity' must contain positive whole numbers")
     durations = pd.to_numeric(frames["time_intervals.csv"]["duration"], errors="coerce")
     if frames["time_intervals.csv"]["time_interval"].duplicated().any() or durations.isna().any() or (durations <= 0).any():
         raise ValueError("time_intervals.csv: intervals must be unique and durations positive")
@@ -88,19 +95,23 @@ def _validate(frames):
             raise ValueError(f"vehicles.csv: '{column}' must contain non-positive numbers")
 
 
-def run(force=False, seed=None):
+def run(force=False, seed=None, transactions=None):
     if not may_write("network_loads.csv", force):
         return 1
     try:
         frames = {path: _read(path) for path in _INPUTS}
-        _validate(frames)
+        transaction_path = transactions or "desire_lines.gpkg"
+        frames["transactions"] = _read(transaction_path)
+        _validate(frames, transaction_path)
         metric_crs = frames["network.gpkg"].estimate_utm_crs() if frames["network.gpkg"].crs.is_geographic else frames["network.gpkg"].crs
         frames["network.gpkg"] = kilometers(frames["network.gpkg"], "network.gpkg", metric_crs)
-        frames["desire_lines.gpkg"] = kilometers(frames["desire_lines.gpkg"], "desire_lines.gpkg", metric_crs)
+        frames["transactions"] = kilometers(frames["transactions"], transaction_path, metric_crs)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             rows = network_loads(
-                *(frames[path].to_dict("records") for path in _INPUTS),
+                frames["network.gpkg"].to_dict("records"),
+                frames["transactions"].to_dict("records"),
+                *(frames[path].to_dict("records") for path in _INPUTS if path != "network.gpkg"),
                 rng=np.random.default_rng(seed),
             )
     except ValueError as error:

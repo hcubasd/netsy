@@ -31,10 +31,14 @@ def test_line_direction_and_totals_follow_provider_and_consumer():
         ]),
         np.random.default_rng(1),
     )
-    assert list(table.columns) == ["resource", "quantity", "origin_agent_id", "geometry"]
+    assert list(table.columns) == [
+        "transaction_id", "resource", "quantity", "origin_agent_id",
+        "destination_agent_id", "geometry",
+    ]
     assert table.crs == CRS
     assert table["quantity"].sum() == 5
     assert table["origin_agent_id"].tolist() == [1]
+    assert table["destination_agent_id"].tolist() == [2]
     assert list(table.geometry.iloc[0].coords) == [(0, 0), (1, 0)]
 
 
