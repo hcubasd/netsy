@@ -64,19 +64,20 @@ export const commands: Command[] = [
       'network.gpkg', 'zones.gpkg', 'assignment_vehicles.csv', 'link_speeds.csv', 'road_costs.csv', 'time_intervals.csv',
     ],
     optional: ['tours.gpkg', 'delivery_tours.gpkg', 'trip_matrices.omx', 'matrix_assignment.csv'],
-    outputs: ['network_loads.csv'],
+    outputs: ['network_loads.parquet'],
   },
   {
     name: 'network-emissions',
-    inputs: ['network_loads.csv', 'network.gpkg', 'emission_factors.csv'],
+    inputs: ['network_loads.parquet', 'network.gpkg', 'emission_factors.csv'],
     // COPERT V (--method copert) instead of MASS-GT's factors.
     optional: ['copert_vehicles.csv', 'copert_v_coefficients.csv', 'non_exhaust_factors.csv'],
-    outputs: ['network_emissions.csv'],
+    outputs: ['network_emissions.parquet'],
   },
 ]
 
-// The browser reads NetSy's CSV and GeoPackage files; OMX skims are HDF5.
-export const viewable = (filename: string) => /\.(csv|gpkg)$/.test(filename)
+// The browser reads NetSy's CSV, GeoPackage and Parquet files; OMX matrices
+// are HDF5.
+export const viewable = (filename: string) => /\.(csv|gpkg|parquet)$/.test(filename)
 
 const acronyms: Record<string, string> = { od: 'OD', copert: 'COPERT', v: 'V' }
 

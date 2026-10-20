@@ -42,11 +42,11 @@ SYNTH_COMMANDS = {
     ),
     "network-loads": (
         "netsy.cli.synth_network_loads",
-        "network.gpkg + zones.gpkg + trips + assignment CSVs -> network_loads.csv",
+        "network.gpkg + zones.gpkg + trips + assignment CSVs -> network_loads.parquet",
     ),
     "network-emissions": (
         "netsy.cli.synth_network_emissions",
-        "network_loads.csv + network.gpkg + emission factors or COPERT V inputs -> network_emissions.csv",
+        "network_loads.parquet + network.gpkg + emission factors or COPERT V inputs -> network_emissions.parquet",
     ),
 }
 

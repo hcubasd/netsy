@@ -45,8 +45,8 @@ netsy synth tours --seed 1           # shipments + zones + skims + tour tables -
 netsy synth parcel-demand            # zones + depots + skims + parcel tables -> parcel_demand.csv
 netsy synth deliveries --seed 1      # parcel demand + zones + skims -> delivery_tours.gpkg
 netsy synth trip-matrices            # zones + skims + trip tables -> trip_matrices.omx
-netsy synth network-loads            # tours, delivery tours, trip matrices + network -> network_loads.csv
-netsy synth network-emissions        # network loads + network + emission factors -> network_emissions.csv
+netsy synth network-loads            # tours, delivery tours, trip matrices + network -> network_loads.parquet
+netsy synth network-emissions        # network loads + network + emission factors -> network_emissions.parquet
 netsy synth facility-chains          # shipments + facilities + chain steps -> transaction_legs.gpkg
 ```
 
@@ -292,7 +292,7 @@ step may derive speeds from it.
 | `tours.gpkg`, `delivery_tours.gpkg` (each optional) | `departure`, `vehicle`, `utilization`, zones, optional `segment` | Trips, in the interval of their departure. |
 | `trip_matrices.omx`, `matrix_assignment.csv` (optional) | `matrix`, `vehicle`, `segment`, `utilization`, `minimum` | Matrix trips, over the whole period. |
 
-`network_loads.csv` has a row per link, interval, vehicle and segment: `trips`, their mean
+`network_loads.parquet` has a row per link, interval, vehicle and segment: `trips`, their mean
 `utilization`, and the link's `speed` for the vehicle.
 
 ### Network emissions

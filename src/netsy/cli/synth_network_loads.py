@@ -27,7 +27,7 @@ def _read(path):
 
 
 def run(force=False):
-    output = "network_loads.csv"
+    output = "network_loads.parquet"
     if not may_write(output, force):
         return 1
     try:
@@ -46,5 +46,5 @@ def run(force=False):
         return 1
     for warning in caught:
         print(f"warning: {warning.message}", file=sys.stderr)
-    table.to_csv(output, index=False, float_format="%.6g")
+    table.to_parquet(output, index=False)
     return 0

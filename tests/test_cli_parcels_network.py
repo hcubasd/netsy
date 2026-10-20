@@ -63,10 +63,10 @@ def test_parcels_vans_loads_and_emissions_in_turn():
     assert geopandas.read_file("delivery_tours.gpkg")["parcels"].sum() == 10
     assert main(["synth", "trip-matrices"]) == 0
     assert main(["synth", "network-loads"]) == 0
-    loads = pd.read_csv("network_loads.csv")
+    loads = pd.read_parquet("network_loads.parquet")
     assert set(loads["segment"]) == {"parcel_deliveries", "service"}
     assert main(["synth", "network-emissions"]) == 0
-    assert pd.read_csv("network_emissions.csv")["co2"].sum() > 0
+    assert pd.read_parquet("network_emissions.parquet")["co2"].sum() > 0
 
 
 def test_unknown_routing_is_a_usage_error():

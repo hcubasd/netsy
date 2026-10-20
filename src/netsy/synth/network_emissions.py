@@ -65,7 +65,7 @@ def _links(network, loads):
     table = loads.assign(link_id=loads["link_id"].map(_zone_key), vehicle=loads["vehicle"].map(_zone_key))
     table = table.merge(links, on="link_id", how="left")
     if table["length"].isna().any():
-        raise ValueError("network_loads.csv: every 'link_id' must be a link of network.gpkg")
+        raise ValueError("network_loads.parquet: every 'link_id' must be a link of network.gpkg")
     for column in ("trips", "utilization", "speed"):
         table[column] = pd.to_numeric(table[column], errors="coerce")
     return table

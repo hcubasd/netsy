@@ -47,10 +47,10 @@ const ROWS: [number, string][][] = [
     [9, 'transaction_legs.gpkg'], [15, 'delivery_tours.gpkg'], [20, 'trip_matrices.omx'],
   ],
   [
-    [1, 'network_loads.csv'], [5, 'emission_factors.csv'], [6, 'copert_vehicles.csv'], [7, 'copert_v_coefficients.csv'],
+    [1, 'network_loads.parquet'], [5, 'emission_factors.csv'], [6, 'copert_vehicles.csv'], [7, 'copert_v_coefficients.csv'],
     [8, 'non_exhaust_factors.csv'],
   ],
-  [[1, 'network_emissions.csv']],
+  [[1, 'network_emissions.parquet']],
   [[0, 'location_attributes.csv'], [1, 'marginal_coefficients.csv'], [2, 'od_prior.csv']],
   [[0, 'productions.csv'], [1, 'attractions.csv']],
   [[1, 'od_flows.csv']],

@@ -24,8 +24,8 @@ const LAYERS: Record<Layer, LayerSpec> = {
   tours: { label: 'Tours', geometry: 'tours.gpkg', key: 'tour_id', direct: true },
   deliveries: { label: 'Delivery tours', geometry: 'delivery_tours.gpkg', key: 'tour_id', direct: true },
   network: { label: 'Network', geometry: 'network.gpkg', key: 'link_id', direct: true },
-  loads: { label: 'Network · loads', geometry: 'network.gpkg', data: 'network_loads.csv', key: 'link_id' },
-  emissions: { label: 'Network · emissions', geometry: 'network.gpkg', data: 'network_emissions.csv', key: 'link_id' },
+  loads: { label: 'Network · loads', geometry: 'network.gpkg', data: 'network_loads.parquet', key: 'link_id' },
+  emissions: { label: 'Network · emissions', geometry: 'network.gpkg', data: 'network_emissions.parquet', key: 'link_id' },
 }
 
 const dimensions = ['resource', 'time_interval', 'vehicle', 'segment']

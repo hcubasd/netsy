@@ -55,7 +55,7 @@ export function DataView({ tables, active, onMap, onLoad, onOpen }: {
     if (tables[name]) return onOpen(name)
     target.current = name
     const input = picker.current!
-    input.accept = name.endsWith('.gpkg') ? '.gpkg' : '.csv'
+    input.accept = name.slice(name.lastIndexOf('.'))
     input.value = ''
     input.click()
   }

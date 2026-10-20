@@ -1,3 +1,4 @@
+import { parquetMetadata, parquetReadObjects } from 'hyparquet'
 import initSqlJs from 'sql.js'
 import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url'
 import type { Cell, DataTable, Geometry, Position } from './types'
@@ -129,9 +130,27 @@ async function parseGeoPackage(file: File): Promise<Omit<DataTable, 'filename'>>
   }
 }
 
+// Parquet, as NetSy writes its large tables; 64-bit integers become numbers.
+async function parseParquet(file: File): Promise<{ columns: string[]; rows: Record<string, Cell>[] }> {
+  const buffer = await file.arrayBuffer()
+  const metadata = parquetMetadata(buffer)
+  const columns = metadata.schema.slice(1).map((element) => element.name)
+  const records = (await parquetReadObjects({ file: buffer, metadata })) as Record<string, unknown>[]
+  const rows = records.map((record) => {
+    const row: Record<string, Cell> = {}
+    for (const column of columns) {
+      const value = record[column]
+      row[column] = typeof value === 'bigint' ? Number(value) : value === undefined ? null : (value as Cell)
+    }
+    return row
+  })
+  return { columns, rows }
+}
+
 // Reads `file` as the NetSy file `name`, whatever the file itself is called:
 // its format is the one `name` expects.
 export async function parseFile(file: File, name: string): Promise<DataTable> {
-  const table = name.endsWith('.gpkg') ? await parseGeoPackage(file) : parseCsv(await file.text())
+  const table = name.endsWith('.gpkg') ? await parseGeoPackage(file)
+    : name.endsWith('.parquet') ? await parseParquet(file) : parseCsv(await file.text())
   return { ...table, filename: name }
 }

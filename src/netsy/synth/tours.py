@@ -28,6 +28,7 @@ import math
 import geopandas
 import numpy as np
 import pandas as pd
+from numba import njit
 from shapely.geometry import LineString
 
 from netsy.helpers.geometry import zone_points
@@ -194,7 +195,8 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
         window_count = 0
         bounds = [(math.nan, math.nan)] * len(shipments)
     stratum_rows = [dict(zip(strata, row)) for row in shipments[strata].map(_zone_key).itertuples(index=False, name=None)]
-    same_key = [tuple(row[name] for name in lists["same_stratum"]) for row in stratum_rows]
+    same_key = pd.Series([tuple(row[name] for name in lists["same_stratum"]) for row in stratum_rows])
+    same_code = pd.factorize(same_key)[0]
 
     # Parts: shipments split into equal parts that fit their vehicle.
     capacity = np.array([capacity_of[v] for v in vehicle])
@@ -218,7 +220,20 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
     later_logit = _EndTour(end_tour_later, "end_tour_later.csv", strata)
 
     def duration(sequence):
-        return float(sum(time[a, b] for a, b in zip(sequence[:-1], sequence[1:])))
+        sequence = np.asarray(sequence)
+        return float(time[sequence[:-1], sequence[1:]].sum())
+
+    nearest_cache = {}
+
+    def nearest(locations, remaining):
+        """The smallest model proximity, once per state of a tour (the cache
+        is cleared as each tour starts).
+        """
+        key = (len(locations), len(remaining))
+        if key not in nearest_cache:
+            nearest_cache.clear()
+            nearest_cache[key] = float(proximity_model(locations, remaining).min())
+        return nearest_cache[key]
 
     def proximity_model(locations, remaining):
         # The distance from the tour's nearest location to a part's loading
@@ -246,7 +261,7 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
         ships = part_of[remaining]
         tour_capacity = capacity_of[vehicle[first]]
         fits = (part_quantity[tour].sum() + part_quantity[remaining]) / tour_capacity < values["capacity_slack"]
-        fits &= np.array([same_key[s] == same_key[first] for s in ships])
+        fits &= same_code[ships] == same_code[first]
         if has_windows:
             windows = window[ships]
             if len(tour) == 1:
@@ -299,22 +314,14 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
         if len(back) > 1:
             order = [zone for index, zone in enumerate(order) if index not in back] + [order[0]]
         if len(order) > 3:
-            local = sorted(set(order))
+            local = np.array(sorted(set(order)))
             at = {zone: index for index, zone in enumerate(local)}
-            travel = time[np.ix_(local, local)].tolist()
-            cost = lambda seq: sum(travel[at[a]][at[b]] for a, b in zip(seq[:-1], seq[1:]))
-            best = cost(order)
-            for a in range(1, len(order)):
-                for b in range(1, len(order)):
-                    if a == b:
-                        continue
-                    moved = order[:b] + order[b + 1:]
-                    moved.insert(a, order[b])
-                    candidate = cost(moved)
-                    if candidate < best and all(
-                        len(moved) - 1 - moved[::-1].index(unload) > moved.index(load) for load, unload in locations
-                    ):
-                        order, best = moved, candidate
+            travel = time[np.ix_(local, local)].astype(np.float64)
+            moved = _relocate(
+                np.array([at[zone] for zone in order]), travel,
+                np.array([at[load] for load, _ in locations]), np.array([at[unload] for _, unload in locations]),
+            )
+            order = [int(local[index]) for index in moved]
         return order
 
     zone_columns = {}
@@ -335,15 +342,16 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
     tour_number = 0
     by_carrier = pd.Series(np.arange(len(part_of))).groupby(carrier, sort=True).indices
     for name in sorted(by_carrier):
-        remaining = list(rng.permutation(by_carrier[name]))
+        remaining = np.array(rng.permutation(by_carrier[name]))
         base = base_zone.get(name)
         if base is not None:
             # A based carrier takes its parts shortest first, as MASS-GT
             # meant to (its code sorts by the loading zone's intrazonal
             # distance instead, which gives the same tours).
-            remaining.sort(key=lambda part: distance[origin[part_of[part]], destination[part_of[part]]])
-        while remaining:
-            first = remaining.pop(0)
+            remaining = remaining[np.argsort(distance[origin[part_of[remaining]], destination[part_of[remaining]]], kind="stable")]
+        while len(remaining):
+            first, remaining = remaining[0], remaining[1:]
+            nearest_cache.clear()
             ship = part_of[first]
             tour = [first]
             locations = [(int(origin[ship]), int(destination[ship]))]
@@ -361,7 +369,7 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
                     used = part_quantity[tour].sum() / tour_capacity
                     return used ** 2 if term == "squared_utilization" else used
                 if term == "proximity":
-                    return float(proximity_model(locations, np.array(remaining)).min())
+                    return nearest(locations, remaining)
                 if term == "log_stops":
                     return math.log(len({zone for pair in locations for zone in pair}))
                 if term == "origin":
@@ -383,19 +391,19 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
                 return (
                     len(tour) - 1 < values["max_shipments"] and duration(order) < values["max_duration"]
                     and part_quantity[tour].sum() / tour_capacity < 1
-                    and proximity_model(locations, np.array(remaining)).min() < values["max_proximity"]
+                    and nearest(locations, remaining) < values["max_proximity"]
                 )
 
-            if remaining and may_go_on() and not first_logit.ends(stratum, features, rng):
-                while remaining and may_go_on():
-                    chosen = select(tour, locations, np.array(remaining))
+            if len(remaining) and may_go_on() and not first_logit.ends(stratum, features, rng):
+                while len(remaining) and may_go_on():
+                    chosen = select(tour, locations, remaining)
                     if chosen is None:
                         break
-                    part = remaining.pop(int(chosen))
+                    part, remaining = remaining[int(chosen)], np.delete(remaining, int(chosen))
                     tour.append(part)
                     locations.append((int(origin[part_of[part]]), int(destination[part_of[part]])))
                     order[:] = sequence(tour, locations, base)
-                    if not remaining or later_logit.ends(stratum, features, rng):
+                    if not len(remaining) or later_logit.ends(stratum, features, rng):
                         break
             tour_number += 1
             trips.extend(_trips(
@@ -408,6 +416,63 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
         trips, assignments, shipments, strata, stratum_rows, vehicle, part_quantity, part_of, skim_zone, zone_point,
         capacity_of, zones.crs,
     )
+
+
+@njit(cache=True)
+def _relocate(order, travel, loads, unloads):
+    """MASS-GT's improvement of a stop order: for every pair of positions in
+    turn, the stop at the second moves to the first where that shortens the
+    tour and no location is unloaded before it is loaded. Each move is
+    judged by the change in duration around it.
+    """
+    count = len(order)
+    order = order.copy()
+    rest = np.empty(count - 1, np.int64)
+    moved = np.empty(count, np.int64)
+    for a in range(1, count):
+        for b in range(1, count):
+            if a == b:
+                continue
+            stop = order[b]
+            change = -travel[order[b - 1], stop]
+            if b + 1 < count:
+                change += travel[order[b - 1], order[b + 1]] - travel[stop, order[b + 1]]
+            k = 0
+            for i in range(count):
+                if i != b:
+                    rest[k] = order[i]
+                    k += 1
+            if a < count - 1:
+                change += travel[rest[a - 1], stop] + travel[stop, rest[a]] - travel[rest[a - 1], rest[a]]
+            else:
+                change += travel[rest[count - 2], stop]
+            if change >= -1e-12:
+                continue
+            k = 0
+            for i in range(count):
+                if i == a:
+                    moved[i] = stop
+                else:
+                    moved[i] = rest[k]
+                    k += 1
+            feasible = True
+            for p in range(len(loads)):
+                first_load = -1
+                for i in range(count):
+                    if moved[i] == loads[p]:
+                        first_load = i
+                        break
+                last_unload = -1
+                for i in range(count - 1, -1, -1):
+                    if moved[i] == unloads[p]:
+                        last_unload = i
+                        break
+                if last_unload <= first_load:
+                    feasible = False
+                    break
+            if feasible:
+                order[:] = moved
+    return order
 
 
 def _trips(tour_id, carrier, tour, order, part_of, part_quantity, origin, destination, window, bounds,
