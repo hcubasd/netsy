@@ -26,7 +26,7 @@ def _write_inputs():
         {"resource": ["parcels", "parcels"], "quantity": [2, 2], "origin_agent_id": [1, 1]},
         geometry=[LineString([(0, 0), (1, 0)]), LineString([(0, 0), (2, 0)])],
         crs=CRS,
-    ).to_file("desire_lines.gpkg", driver="GPKG")
+    ).to_file("shipments.gpkg", driver="GPKG")
     pd.DataFrame([["parcels", "day", 1.0]], columns=["resource", "time_interval", "probability"]).to_csv("departures.csv", index=False)
     pd.DataFrame([["day", 100.0]], columns=["time_interval", "duration"]).to_csv("time_intervals.csv", index=False)
     pd.DataFrame([["parcels", 0.0]], columns=["resource", "dwell_time"]).to_csv("dwell_times.csv", index=False)
@@ -67,7 +67,7 @@ def test_dwell_times_rejects_removed_return_load(capsys):
 
 def test_uses_explicit_transaction_legs_path():
     _write_inputs()
-    transactions = geopandas.read_file("desire_lines.gpkg")
+    transactions = geopandas.read_file("shipments.gpkg")
     transactions["transaction_id"] = [1, 2]
     transactions["destination_agent_id"] = [2, 3]
     transactions.to_file("transaction_legs.gpkg", driver="GPKG")
@@ -79,7 +79,7 @@ def test_uses_explicit_transaction_legs_path():
 
 def test_routes_legs_created_by_a_facility_chain():
     _write_inputs()
-    transactions = geopandas.read_file("desire_lines.gpkg").iloc[[1]].copy()
+    transactions = geopandas.read_file("shipments.gpkg").iloc[[1]].copy()
     transactions["transaction_id"] = ["shipment-1"]
     transactions["destination_agent_id"] = ["customer"]
     facilities = geopandas.GeoDataFrame(

@@ -8,13 +8,13 @@ SYNTH_COMMANDS = {
         "netsy.cli.synth_agents",
         "zones.gpkg + size_totals.csv + size_classes.csv -> agents.gpkg",
     ),
-    "desire-lines": (
-        "netsy.cli.synth_desire_lines",
-        "agents.gpkg -> desire_lines.gpkg",
+    "shipments": (
+        "netsy.cli.synth_shipments",
+        "zones.gpkg + agents.gpkg + skims.omx + shipment CSVs -> shipments.gpkg",
     ),
     "facility-chains": (
         "netsy.cli.synth_facility_chains",
-        "desire_lines.gpkg + facilities.gpkg + facility_chain_steps.csv -> transaction_legs.gpkg",
+        "shipments.gpkg + facilities.gpkg + facility_chain_steps.csv -> transaction_legs.gpkg",
     ),
     "od-flows": (
         "netsy.cli.synth_od_flows",
@@ -39,7 +39,7 @@ def build_parser():
     for name, (module, description) in SYNTH_COMMANDS.items():
         command = commands.add_parser(name, help=description, description=description)
         command.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
-        if name in {"agents", "desire-lines", "network-loads"}:
+        if name in {"agents", "shipments", "network-loads"}:
             command.add_argument("--seed", type=int, help="seed the random draws, so the same inputs give the same output")
         if name == "agents":
             command.add_argument(
@@ -53,7 +53,7 @@ def build_parser():
             command.add_argument(
                 "--transactions",
                 metavar="PATH",
-                help="transaction-line GeoPackage; defaults to desire_lines.gpkg",
+                help="transaction-line GeoPackage; defaults to shipments.gpkg",
             )
         command.set_defaults(module=module)
     return parser

@@ -5,7 +5,7 @@ export interface Command {
   name: string
   inputs: string[]
   outputs: string[]
-  // Read only when asked (`--transactions`).
+  // Read only when present, or when asked (`--transactions`).
   optional?: string[]
 }
 
@@ -15,13 +15,21 @@ export const commands: Command[] = [
     inputs: ['zones.gpkg', 'size_totals.csv', 'size_classes.csv'],
     outputs: ['agents.gpkg'],
   },
-  { name: 'desire-lines', inputs: ['agents.gpkg'], outputs: ['desire_lines.gpkg'] },
+  {
+    name: 'shipments',
+    inputs: [
+      'zones.gpkg', 'agents.gpkg', 'skims.omx', 'production_rates.csv', 'consumption_rates.csv', 'shipment_totals.csv',
+      'flow_types.csv', 'distance_decay.csv', 'shipment_sizes.csv', 'shipment_vehicles.csv', 'vehicle_choice.csv',
+    ],
+    optional: ['facilities.gpkg', 'delivery_windows.csv', 'delivery_choice.csv'],
+    outputs: ['shipments.gpkg'],
+  },
   { name: 'od-flows', inputs: ['productions.csv', 'attractions.csv', 'od_prior.csv'], outputs: ['od_flows.csv'] },
-  { name: 'facility-chains', inputs: ['desire_lines.gpkg', 'facilities.gpkg', 'facility_chain_steps.csv'], outputs: ['transaction_legs.gpkg'] },
+  { name: 'facility-chains', inputs: ['shipments.gpkg', 'facilities.gpkg', 'facility_chain_steps.csv'], outputs: ['transaction_legs.gpkg'] },
   {
     name: 'network-loads',
     inputs: [
-      'network.gpkg', 'desire_lines.gpkg', 'departures.csv', 'time_intervals.csv', 'dwell_times.csv', 'vehicles.csv',
+      'network.gpkg', 'shipments.gpkg', 'departures.csv', 'time_intervals.csv', 'dwell_times.csv', 'vehicles.csv',
       'vehicle_velocities.csv', 'vehicle_capacities.csv', 'road_capacities.csv', 'alternative_specific_constants.csv',
     ],
     optional: ['transaction_legs.gpkg'],
@@ -33,6 +41,9 @@ export const commands: Command[] = [
     outputs: ['network_emissions.csv'],
   },
 ]
+
+// The browser reads NetSy's CSV and GeoPackage files; OMX skims are HDF5.
+export const viewable = (filename: string) => /\.(csv|gpkg)$/.test(filename)
 
 const acronyms: Record<string, string> = { od: 'OD', copert: 'COPERT', v: 'V' }
 

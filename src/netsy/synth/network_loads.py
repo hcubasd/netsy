@@ -82,10 +82,10 @@ def _route(predecessors, source, target, arcs):
     return list(reversed(path))
 
 
-def _targets(desire_lines, departures, intervals):
+def _targets(transactions, departures, intervals):
     """Apportion each resource's integer total across valid intervals exactly."""
     totals = defaultdict(int)
-    for line in desire_lines:
+    for line in transactions:
         totals[line["resource"]] += int(line["quantity"])
     positions = {interval: position for position, interval in enumerate(intervals)}
     probabilities = defaultdict(dict)
@@ -109,9 +109,9 @@ def _targets(desire_lines, departures, intervals):
     return targets
 
 
-def _shipments(desire_lines):
+def _shipments(transactions):
     shipments = {}
-    for line in desire_lines:
+    for line in transactions:
         start, end = list(line["geometry"].coords)
         key = (line["resource"], line["origin_agent_id"])
         shipment = shipments.setdefault(key, {
@@ -283,12 +283,12 @@ def _advance(trip, duration, links_by_id, speeds, vehicles, v_over_c):
 
 
 def network_loads(
-    network, desire_lines, departures, time_intervals, dwell_times, vehicles,
+    network, transactions, departures, time_intervals, dwell_times, vehicles,
     vehicle_velocities, vehicle_capacities, road_capacities, alternative_specific_constants, rng,
 ):
     """Synthesize capacity-constrained, depot-return vehicle tours into
     directional network loads. Every tour carries one resource, serves a
-    provider's desire-line endpoints by cheapest insertion, dwells at each
+    provider's transaction endpoints by cheapest insertion, dwells at each
     endpoint, and returns empty to its provider.
     """
     road_capacity = {row["road_type"]: float(row["capacity"]) for row in road_capacities}
@@ -317,8 +317,8 @@ def network_loads(
     dwell = {row["resource"]: float(row["dwell_time"]) for row in dwell_times}
     intervals = [row["time_interval"] for row in time_intervals]
     durations = {row["time_interval"]: float(row["duration"]) for row in time_intervals}
-    shipments = _shipments(desire_lines)
-    targets = _targets(desire_lines, departures, intervals)
+    shipments = _shipments(transactions)
+    targets = _targets(transactions, departures, intervals)
     active, output, v_over_c = [], [], {}
 
     for interval in intervals:

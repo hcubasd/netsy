@@ -38,7 +38,7 @@ Run each command in the directory holding its input files.
 
 ```
 netsy synth agents --seed 1       # zones + size totals + size classes -> agents.gpkg
-netsy synth desire-lines --seed 1 # agents.gpkg -> desire_lines.gpkg
+netsy synth shipments --seed 1    # agents + zones + skims + shipment tables -> shipments.gpkg
 netsy synth od-flows               # production/attraction marginals + OD prior -> od_flows.csv
 netsy synth facility-chains        # direct transactions + facilities -> transaction_legs.gpkg
 netsy synth network-loads --seed 1 # transaction lines + network inputs -> network_loads.csv
@@ -46,9 +46,9 @@ netsy synth network-emissions      # network loads + COPERT inputs -> network_em
 ```
 
 An existing output file is only replaced with `--force`.
-`agents`, `desire-lines`, and `network-loads` make random draws; pass `--seed` to reproduce them.
+`agents`, `shipments`, and `network-loads` make random draws; pass `--seed` to reproduce them.
 
-`network-loads` reads `desire_lines.gpkg` by default. Pass
+`network-loads` reads `shipments.gpkg` by default. Pass
 `--transactions transaction_legs.gpkg` to route facility-mediated transaction legs instead:
 
 ```sh
@@ -111,22 +111,56 @@ three employees or fewer; their size is not given to others.
 `agents.gpkg` holds the actors: an `agent_id`, the stratum columns, `size`, and point
 geometry.
 
-`desire-lines` matches agents that carry a `{resource}_production` and a
-`{resource}_consumption` column for every resource (whole numbers; an empty cell means the
-agent does not take part), such as agents from a register or an operator's records. The
-agents NetSy synthesizes do not carry them: a shipments stage, after MASS-GT's, is to
-replace this matching. `desire_lines.gpkg` contains one direct
-provider-to-consumer transaction per row. It preserves both endpoints as identities;
-geometry is its spatial representation, not its only identity.
+### Shipments
 
-| transaction_id | resource | quantity | origin_agent_id | destination_agent_id | geometry |
-|---|---|---:|---:|---:|---|
-| 0 | resource_1 | 2 | 1 | 8 | LINESTRING (0.42 0.71, 0.38 0.65) |
+`shipments` draws the shipments between agents, facilities and zones the way MASS-GT's shipment
+synthesis does, generalized to any resources, regions, flow types and facility types. Every row
+of `shipment_totals.csv` is a quantity of one shipment stratum to move from one region to another
+by one flow type. A shipment stratum is `resource` and any other columns, such as a logistic
+segment; a region is a group of zones, such as a study area or an external zone. A flow type
+names what each end is: an `agent`, a facility type, or a `zone` itself.
 
-For each resource, a producer is selected by remaining production and matched with
-consumers until the producer is depleted. Consumers are selected by their remaining
-consumption and distance-weighted proximity. A desire line starts at its provider and ends at its
-consumer.
+| file | fields | purpose |
+|---|---|---|
+| `zones.gpkg` | `zone_id`, `region`, polygon geometry, and any numeric zone columns the delivery choice uses | Where shipments start and end. |
+| `agents.gpkg` | the output of `agents` | Who sends and receives. |
+| `facilities.gpkg` (optional) | `facility_id`, `facility_type`, `zone_id`, `size`, point geometry, and any weight or grouping columns | Distribution centres, terminals, depots: ends of flow types that name their type. |
+| `skims.omx` | OMX matrices `time` (hours) and `distance` (km), lookup `zone_id` | Zone-to-zone travel time and distance. |
+| `production_rates.csv`, `consumption_rates.csv` | key columns (agent or shipment strata), `rate` | What an agent of each class makes and uses per unit of size, such as make/use shares per sector and commodity. |
+| `shipment_totals.csv` | `origin_region`, `destination_region`, optional `origin_zone_id`/`destination_zone_id`, `flow_type`, `resource` and other strata, `quantity` | The quantity to ship; a zone id pins that end to the zone. |
+| `flow_types.csv` | `flow_type`, `origin`, `destination`, optional `decay`, `origin_weight`, `destination_weight`, `same`, `distinct` | What each end is, which end is drawn with distance decay, and how facility ends are weighted and paired. |
+| `distance_decay.csv` | key columns, `alpha`, `beta`, `cost_per_hour`, `cost_per_km` | The decay of the sourcing cost. |
+| `shipment_sizes.csv` | `size_class`, `quantity` | The quantity a shipment of each class carries. |
+| `shipment_vehicles.csv` | `vehicle`, `capacity`, `cost_per_hour`, `cost_per_km` | The vehicles a shipment may take. |
+| `vehicle_choice.csv` | key columns, `vehicle` (empty for every vehicle), `term`, `value` | The size class and vehicle logit. |
+| `delivery_windows.csv`, `delivery_choice.csv` (optional, both or neither) | key columns, `window`, `start`, `end`; key columns, `window` (empty for every window), `term`, `value` | Delivery windows and their logit. |
+
+Key columns are any subset of the shipment strata (or, for rates, of the agent strata too), so a
+parameter can be global, per resource, per segment, or anything between.
+
+For example, flow types of a freight model with distribution centres, external zones and parcel
+depots shared by operators:
+
+| flow_type | origin | destination | decay | origin_weight | destination_weight | same | distinct |
+|---|---|---|---|---|---|---|---|
+| direct | agent | agent | origin | | | | |
+| to_distribution_centre | agent | distribution_centre | origin | | | | |
+| import_direct | zone | agent | destination | | | | |
+| parcel_between_depots | parcel_depot | parcel_depot | | size | internal_share | operator | true |
+
+Vehicle-choice terms are `constant`, `transport_cost` (the cost of the vehicles a shipment needs),
+`size` (its class quantity), `size_class:<class>`, `origin:<kind>` and `destination:<kind>`
+(the kind of an end), and `distance_above:<km>`. Delivery-choice terms are `constant`,
+`log_duration`, `origin:<zone column>` and `destination:<zone column>` (a numeric zone value at
+an end), and `vehicle:<vehicle>`.
+
+`shipments.gpkg` has one shipment per row: `transaction_id`, the shipment strata, `quantity`,
+`origin_agent_id` and `destination_agent_id` (empty for an end that is not an agent),
+`flow_type`, the facility and zone of each end, `size_class`, `vehicle`, `window`,
+`window_start` and `window_end`, and a line from its origin to its destination.
+
+`facility-chains` and `network-loads` still count quantities in whole units, so shipments of
+fractional quantities, such as tonnes, do not pass them yet.
 
 ### Facility-mediated transactions
 
@@ -134,7 +168,7 @@ consumer.
 
 | file | required fields | purpose |
 |---|---|---|
-| `desire_lines.gpkg` | `transaction_id`, `resource`, `quantity`, `origin_agent_id`, `destination_agent_id` | Direct transactions to expand. |
+| `shipments.gpkg` | `transaction_id`, `resource`, `quantity`, `origin_agent_id`, `destination_agent_id` | Direct transactions to expand. |
 | `facilities.gpkg` | `facility_id`, `facility_type`, `capacity`, point geometry | Explicit facility locations and total throughput constraints. |
 | `facility_chain_steps.csv` | `transaction_id`, `sequence`, `facility_id` | Consecutive facility steps for a transaction. |
 
@@ -158,7 +192,7 @@ and chain inputs without changing the core chain semantics.
 | file | purpose |
 |---|---|
 | `network.gpkg` | Directed road links: `link_id`, `grade`, `road_type`, `oneway`, and line geometry. |
-| transaction-line GeoPackage | Direct transactions (`desire_lines.gpkg`) or explicit facility legs (`--transactions transaction_legs.gpkg`). |
+| transaction-line GeoPackage | Direct transactions (`shipments.gpkg`) or explicit facility legs (`--transactions transaction_legs.gpkg`). |
 | `departures.csv` | `resource`, `time_interval`, and departure probability. |
 | `time_intervals.csv` | Ordered `time_interval` values and their `duration`. |
 | `dwell_times.csv` | Per-resource `dwell_time` at every customer stop. |
@@ -168,7 +202,7 @@ and chain inputs without changing the core chain semantics.
 | `road_capacities.csv` | Road capacity by road type. |
 | `alternative_specific_constants.csv` | Vehicle/resource alternative-specific constants. |
 
-`network.gpkg` and `desire_lines.gpkg` must share a CRS. NetSy transiently normalizes
+`network.gpkg` and the transactions must share a CRS. NetSy transiently normalizes
 their geometry to kilometres; vehicle velocities are kilometres per interval-time unit and
 COPERT V requires interval durations in hours. There is no
 `consolidation_radii.csv`: capacity-constrained routing replaces radius consolidation.
@@ -258,8 +292,27 @@ $\max(\mathrm{median}_c, 1.5\,S_s)$. A size above $1.3\,S_s$ becomes $S_s$. $S_s
 $e$, and the number of agents is where $S_s$ runs out. Agents of size zero, or below
 `--min-size`, are dropped, and each remaining agent is placed uniformly in its zone.
 
-Desire lines match each resource's producers to consumers by remaining quantity and
-distance-weighted proximity.
+Shipments are drawn total by total, as MASS-GT draws them. While a total of stratum $s$ by flow
+type $f$ has quantity $Q$ left, one end is drawn by weight alone and the other by weight times
+distance decay: the destination first and the origin second, unless $f$ decays the destination.
+An agent's weight is its size times its rate for $s$, a facility's is its weight column, a zone's
+is one, and only candidates in the end's region (or pinned zone) count. The decay between origin
+zone $i$ and destination zone $j$ is $1 / (1 + e^{\alpha + \beta \ln c_{ij}})$, with
+$c_{ij} = \mathrm{cost/h} \cdot t_{ij} + \mathrm{cost/km} \cdot d_{ij}$; a zero skim cell, such
+as an intrazonal one, takes half the smallest positive value of its row. Ends that must share a
+facility column or differ are drawn among those that do. The size class $k$ and vehicle $v$ are
+then chosen together by multinomial logit, with $\mathrm{transport\_cost} = (\mathrm{cost/h}_v
+\cdot t + \mathrm{cost/km}_v \cdot d) \lceil q_k / \mathrm{capacity}_v \rceil$; the shipment
+carries $\min(q_k, Q)$, and $Q$ falls by it. Last, each shipment's delivery window is chosen by
+multinomial logit over its stratum's windows.
+
+With MASS-GT's Dutch inputs, regions are its superzones, flow types its twelve (external ones
+split by direction), and the shipment strata its NSTR commodity, logistic segment and flow-type
+id. Its exports read the commodity matrix's external-to-internal cells and its imports the
+reverse, which the totals reproduce. Two of its quirks are not reproduced: a parcel origin depot
+that equals the destination depot moves to its neighbour in MASS-GT's depot list, where NetSy
+draws among the operator's other depots, and its import draws reuse one random stream for every
+external zone.
 
 Network loads apportion each resource's transaction total exactly across departure
 intervals. Within an interval, NetSy draws a provider and seed consumer from residual

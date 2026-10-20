@@ -31,7 +31,7 @@ def run(force=False):
     if not may_write(output, force):
         return 1
     try:
-        transactions = _read_geopackage("desire_lines.gpkg")
+        transactions = _read_geopackage("shipments.gpkg")
         facilities = _read_geopackage("facilities.gpkg")
         steps = _read_csv("facility_chain_steps.csv")
         legs = facility_chains(transactions, facilities, steps)

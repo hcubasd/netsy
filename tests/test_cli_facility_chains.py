@@ -25,7 +25,7 @@ def _write_inputs():
         },
         geometry=[LineString([(0, 0), (2, 0)])],
         crs=CRS,
-    ).to_file("desire_lines.gpkg", driver="GPKG")
+    ).to_file("shipments.gpkg", driver="GPKG")
     geopandas.GeoDataFrame(
         {"facility_id": ["hub"], "facility_type": ["microhub"], "capacity": [2]},
         geometry=[Point(1, 0)],

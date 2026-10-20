@@ -3,6 +3,7 @@ import os
 import geopandas
 import pandas as pd
 
+from netsy.helpers import validate
 from netsy.helpers.validate import check_agents, check_size_classes, check_size_totals, check_zones
 
 
@@ -56,3 +57,28 @@ def read_agents(path):
     prefixed with the path, if the file is missing or malformed.
     """
     return _checked(path, _read_geopackage(path), check_agents)
+
+
+def read_facilities(path):
+    """The facilities at `path` as a GeoDataFrame, validated."""
+    return _checked(path, _read_geopackage(path), validate.check_facilities)
+
+
+# The tables shipments reads, by file name, with the check of each.
+SHIPMENT_TABLES = {
+    "production_rates.csv": validate.check_rates,
+    "consumption_rates.csv": validate.check_rates,
+    "shipment_totals.csv": validate.check_shipment_totals,
+    "flow_types.csv": validate.check_flow_types,
+    "distance_decay.csv": validate.check_distance_decay,
+    "shipment_sizes.csv": validate.check_shipment_sizes,
+    "shipment_vehicles.csv": validate.check_shipment_vehicles,
+    "vehicle_choice.csv": lambda table: validate.check_choice(table, "vehicle"),
+    "delivery_windows.csv": validate.check_delivery_windows,
+    "delivery_choice.csv": lambda table: validate.check_choice(table, "window"),
+}
+
+
+def read_table(path):
+    """The shipment input table at `path`, validated by its file name."""
+    return _checked(path, _read_csv(path), SHIPMENT_TABLES[os.path.basename(path)])

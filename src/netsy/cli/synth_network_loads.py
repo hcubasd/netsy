@@ -100,7 +100,7 @@ def run(force=False, seed=None, transactions=None):
         return 1
     try:
         frames = {path: _read(path) for path in _INPUTS}
-        transaction_path = transactions or "desire_lines.gpkg"
+        transaction_path = transactions or "shipments.gpkg"
         frames["transactions"] = _read(transaction_path)
         _validate(frames, transaction_path)
         metric_crs = frames["network.gpkg"].estimate_utm_crs() if frames["network.gpkg"].crs.is_geographic else frames["network.gpkg"].crs

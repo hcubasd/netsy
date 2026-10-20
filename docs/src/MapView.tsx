@@ -6,7 +6,7 @@ import type { Cell, DataTable } from './types'
 
 // The map: NetSy's geometries, colored by a measure, in a white square.
 
-type Layer = 'zones' | 'agents' | 'desire' | 'grade' | 'loads' | 'emissions'
+type Layer = 'zones' | 'agents' | 'facilities' | 'shipments' | 'grade' | 'loads' | 'emissions'
 
 interface LayerSpec {
   label: string
@@ -19,7 +19,8 @@ interface LayerSpec {
 const LAYERS: Record<Layer, LayerSpec> = {
   zones: { label: 'Zones', geometry: 'zones.gpkg', key: 'zone_id', direct: true },
   agents: { label: 'Agents', geometry: 'agents.gpkg', key: 'agent_id', direct: true },
-  desire: { label: 'Desire lines', geometry: 'desire_lines.gpkg', key: 'origin_agent_id', direct: true },
+  facilities: { label: 'Facilities', geometry: 'facilities.gpkg', key: 'facility_id', direct: true },
+  shipments: { label: 'Shipments', geometry: 'shipments.gpkg', key: 'transaction_id', direct: true },
   grade: { label: 'Network · grade', geometry: 'network.gpkg', key: 'link_id', direct: true },
   loads: { label: 'Network · loads', geometry: 'network.gpkg', data: 'network_loads.csv', key: 'link_id' },
   emissions: { label: 'Network · emissions', geometry: 'network.gpkg', data: 'network_emissions.csv', key: 'link_id' },

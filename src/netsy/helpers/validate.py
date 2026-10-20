@@ -98,34 +98,188 @@ def check_size_classes(table):
     return table
 
 
-def check_agents(agents):
-    """Raise ValueError unless `agents` has unique identifiers, point
-    locations, and paired whole-number production/consumption resource
-    columns. Empty resource values are permitted: they mean that agent does
-    not take part in that resource.
-    """
-    if "agent_id" not in agents.columns:
-        raise ValueError("missing 'agent_id' column")
-    if agents.empty:
+def _required(table, columns):
+    missing = [column for column in columns if column not in table.columns]
+    if missing:
+        raise ValueError(f"missing columns {missing}")
+    if table.empty:
         raise ValueError("must have at least one row")
+
+
+def _filled(table, columns, what="columns"):
+    if columns and table[list(columns)].isna().any().any():
+        raise ValueError(f"{what} {list(columns)} must not have empty cells")
+
+
+def _unique(table, columns, what):
+    if (table.duplicated(list(columns)).any() if columns else len(table) > 1):
+        raise ValueError(f"each {what} may appear only once")
+
+
+def _any_numbers(table, columns):
+    """`table` with `columns` converted to numbers of any sign, every one present."""
+    table = table.copy()
+    for column in columns:
+        values = pd.to_numeric(table[column], errors="coerce")
+        if values.isna().any():
+            raise ValueError(f"'{column}' must hold numbers in every row")
+        table[column] = values
+    return table
+
+
+def _positive(table, columns):
+    table = _numbers(table, columns)
+    for column in columns:
+        if (table[column] <= 0).any():
+            raise ValueError(f"'{column}' must hold numbers above 0 in every row")
+    return table
+
+
+def _points(table):
+    if table.crs is None:
+        raise ValueError("missing CRS")
+    if table.geometry.isna().any() or table.geometry.is_empty.any():
+        raise ValueError("every row needs a geometry")
+    if not table.geometry.geom_type.eq("Point").all():
+        raise ValueError("geometries must be points")
+
+
+def check_agents(agents):
+    """`agents.gpkg` with its sizes as numbers: a unique `agent_id`, the
+    agent's `zone_id` and other stratum columns, a `size` of zero or more and
+    a point geometry.
+    """
+    _required(agents, ("agent_id", "zone_id", "size"))
     if agents["agent_id"].isna().any() or agents["agent_id"].duplicated().any():
         raise ValueError("'agent_id' values must be present and unique")
-    if agents.crs is None:
-        raise ValueError("missing CRS")
-    if agents.geometry.isna().any() or agents.geometry.is_empty.any():
-        raise ValueError("every agent needs a geometry")
-    if not agents.geometry.geom_type.eq("Point").all():
-        raise ValueError("agent geometries must be points")
+    _filled(agents, [column for column in agents.columns if column not in ("size", "geometry")], "stratum columns")
+    _points(agents)
+    return _numbers(agents, ("size",))
 
-    production = {column[:-len("_production")] for column in agents.columns if column.endswith("_production")}
-    consumption = {column[:-len("_consumption")] for column in agents.columns if column.endswith("_consumption")}
-    if not production:
-        raise ValueError("must have at least one paired production and consumption resource")
-    if production != consumption:
-        raise ValueError("every resource must have both '_production' and '_consumption' columns")
-    for resource in production:
-        for suffix in ("_production", "_consumption"):
-            values = pd.to_numeric(agents[f"{resource}{suffix}"], errors="coerce")
-            original = agents[f"{resource}{suffix}"]
-            if original.notna().ne(values.notna()).any() or ((values.dropna() < 0) | (values.dropna() % 1 != 0)).any():
-                raise ValueError(f"'{resource}{suffix}' must contain whole numbers, zero or more, or empty cells")
+
+def check_facilities(facilities):
+    """Raise ValueError unless every facility has a unique `facility_id`, a
+    `facility_type`, the `zone_id` it lies in and a point geometry.
+    """
+    _required(facilities, ("facility_id", "facility_type", "zone_id"))
+    if facilities["facility_id"].isna().any() or facilities["facility_id"].duplicated().any():
+        raise ValueError("'facility_id' values must be present and unique")
+    _filled(facilities, ("facility_type", "zone_id"))
+    _points(facilities)
+
+
+def check_rates(table):
+    """`production_rates.csv` or `consumption_rates.csv` with its rates as
+    numbers: key columns and a `rate` of zero or more, one row per key.
+    """
+    _required(table, ("rate",))
+    keys = [column for column in table.columns if column != "rate"]
+    if not keys:
+        raise ValueError("needs at least one key column, such as 'resource'")
+    _filled(table, keys, "key columns")
+    _unique(table, keys, "key")
+    return _numbers(table, ("rate",))
+
+
+# The columns of shipment_totals.csv that are not shipment strata.
+SHIPMENT_TOTAL_FIELDS = (
+    "origin_region", "destination_region", "origin_zone_id", "destination_zone_id", "flow_type", "quantity",
+)
+
+
+def check_shipment_totals(table):
+    """`shipment_totals.csv` with its quantities as numbers: one row per
+    origin region, destination region, optional pinned zones, flow type and
+    shipment stratum (`resource` and any other columns).
+    """
+    _required(table, ("origin_region", "destination_region", "flow_type", "resource", "quantity"))
+    strata = [column for column in table.columns if column not in SHIPMENT_TOTAL_FIELDS]
+    _filled(table, ["origin_region", "destination_region", "flow_type"] + strata)
+    _unique(table, [column for column in table.columns if column != "quantity"], "region pair, flow type and stratum")
+    return _numbers(table, ("quantity",))
+
+
+def check_flow_types(table):
+    """`flow_types.csv` with `distinct` as booleans: per `flow_type`, the
+    kind of its `origin` and `destination` (`agent`, `zone`, or a facility
+    type), which end, if any, is weighted by distance `decay`, and optional
+    facility weight columns, a facility column both ends must share
+    (`same`) and whether the ends must differ (`distinct`).
+    """
+    _required(table, ("flow_type", "origin", "destination"))
+    _filled(table, ("flow_type", "origin", "destination"))
+    _unique(table, ("flow_type",), "flow type")
+    table = table.copy()
+    for column in ("decay", "origin_weight", "destination_weight", "same", "distinct"):
+        if column not in table.columns:
+            table[column] = None
+    if not table["decay"].dropna().isin(["origin", "destination"]).all():
+        raise ValueError("'decay' must be 'origin', 'destination' or empty")
+    distinct = table["distinct"].fillna("false").astype(str).str.lower()
+    if not distinct.isin(["true", "false"]).all():
+        raise ValueError("'distinct' must be 'true', 'false' or empty")
+    table["distinct"] = distinct.eq("true")
+    return table
+
+
+def check_distance_decay(table):
+    """`distance_decay.csv` with its values as numbers: per key (any shipment
+    strata, or none), the decay's `alpha` and `beta` and the sourcing cost
+    per hour and per kilometre.
+    """
+    values = ("alpha", "beta", "cost_per_hour", "cost_per_km")
+    _required(table, values)
+    keys = [column for column in table.columns if column not in values]
+    _filled(table, keys, "key columns")
+    _unique(table, keys, "key")
+    return _numbers(_any_numbers(table, ("alpha", "beta")), ("cost_per_hour", "cost_per_km"))
+
+
+def check_shipment_sizes(table):
+    """`shipment_sizes.csv` with its quantities as numbers: a unique
+    `size_class` and the `quantity` a shipment of that class carries.
+    """
+    _required(table, ("size_class", "quantity"))
+    _filled(table, ("size_class",))
+    _unique(table, ("size_class",), "size class")
+    return _positive(table, ("quantity",))
+
+
+def check_shipment_vehicles(table):
+    """`shipment_vehicles.csv` with its values as numbers: a unique
+    `vehicle`, its `capacity`, and its cost per hour and per kilometre.
+    """
+    _required(table, ("vehicle", "capacity", "cost_per_hour", "cost_per_km"))
+    _filled(table, ("vehicle",))
+    _unique(table, ("vehicle",), "vehicle")
+    return _numbers(_positive(table, ("capacity",)), ("cost_per_hour", "cost_per_km"))
+
+
+def check_choice(table, alternative):
+    """A choice-coefficient table (`vehicle_choice.csv` keyed by `vehicle`,
+    `delivery_choice.csv` by `window`) with its values as numbers: per key
+    (any shipment strata, or none), alternative (empty for every
+    alternative) and `term`, a `value`.
+    """
+    _required(table, ("term", "value"))
+    table = table.copy()
+    if alternative not in table.columns:
+        table[alternative] = None
+    keys = [column for column in table.columns if column not in (alternative, "term", "value")]
+    _filled(table, keys + ["term"])
+    _unique(table, keys + [alternative, "term"], "key, alternative and term")
+    return _any_numbers(table, ("value",))
+
+
+def check_delivery_windows(table):
+    """`delivery_windows.csv` with its bounds as numbers: per key (any
+    shipment strata, or none), each `window` and its `start` and `end`.
+    """
+    _required(table, ("window", "start", "end"))
+    keys = [column for column in table.columns if column not in ("window", "start", "end")]
+    _filled(table, keys + ["window"])
+    _unique(table, keys + ["window"], "key and window")
+    table = _any_numbers(table, ("start", "end"))
+    if (table["end"] <= table["start"]).any():
+        raise ValueError("every window must end after it starts")
+    return table

@@ -10,7 +10,7 @@ def _inputs(capacity=4, oneway=False):
         {"link_id": 0, "grade": 0.0, "road_type": "road", "oneway": oneway, "geometry": LineString([(0, 0), (1, 0)])},
         {"link_id": 1, "grade": 0.0, "road_type": "road", "oneway": oneway, "geometry": LineString([(1, 0), (2, 0)])},
     ]
-    desire_lines = [
+    transactions = [
         {"resource": "parcels", "quantity": 2, "origin_agent_id": 1, "geometry": LineString([(0, 0), (1, 0)])},
         {"resource": "parcels", "quantity": 2, "origin_agent_id": 1, "geometry": LineString([(0, 0), (2, 0)])},
     ]
@@ -25,7 +25,7 @@ def _inputs(capacity=4, oneway=False):
     capacities = [{"vehicle": "van", "resource": "parcels", "capacity": capacity}]
     road_capacities = [{"road_type": "road", "capacity": 100.0}]
     asc = [{"vehicle": "van", "resource": "parcels", "alternative_specific_constant": 0.0}]
-    return network, desire_lines, departures, intervals, dwell, vehicles, velocities, capacities, road_capacities, asc
+    return network, transactions, departures, intervals, dwell, vehicles, velocities, capacities, road_capacities, asc
 
 
 def _synth(*args, seed=1):

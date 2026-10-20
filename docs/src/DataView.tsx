@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { layoutCircuit } from './circuit'
-import { titleCase } from './files'
+import { titleCase, viewable } from './files'
 import { background, onFrame } from './scene/frames'
 import { Pan } from './scene/pan'
 import type { DataTable } from './types'
@@ -72,7 +72,7 @@ export function DataView({ tables, active, onMap, onLoad, onOpen }: {
           {circuit.nodes.map((node) => (
             <button key={node.id} type="button" className={`file glass ${tables[node.id] ? 'loaded' : ''}`} data-glass
               style={{ left: node.x, top: node.y, ...circuit.bubble }}
-              aria-label={`${titleCase(node.id)} (${node.id})`} onClick={() => choose(node.id)}>
+              disabled={!viewable(node.id)} aria-label={`${titleCase(node.id)} (${node.id})`} onClick={() => choose(node.id)}>
               <span>{titleCase(node.id)}</span>
             </button>
           ))}
