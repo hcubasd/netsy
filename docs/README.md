@@ -31,8 +31,7 @@ background with it.
   selecting it opens a file picker and loads the chosen file as that NetSy file, whatever
   it is called; while it loads, a rolling cat sits in the middle of the window and nothing
   else responds. Files are read and their map geometry prepared in a background worker.
-  A loaded file is black; selecting it opens its table. Hovering a name shows
-  the file name NetSy expects. **Map** moves back.
+  A loaded file is black; selecting it opens its table. **Map** moves back.
 - **Table**: the file's rows in a white sheet, panned in any direction with the header
   pinned. **Remove** unloads the file and returns to the data view; **Data** returns
   without unloading it.
@@ -49,12 +48,13 @@ with iOS's deceleration, and wheels, trackpads and arrow keys pan directly.
 ### The data graph
 
 `src/circuit.ts` lays the graph out as a top-down circuit. Every bubble has the same size on
-a grid of as many columns as fit the window. A file a command makes sits in the first row
+a grid of as many columns as fit the window; bubbles narrow a little where that lets all of
+one command's inputs share a row. A file a command makes sits in the first row
 below all of its inputs; a file nothing makes sits in the rows directly above the first
 file made from it. Wires run only through the empty channels between rows and the gaps
 between columns, so none crosses a bubble: outputs leave a bubble's bottom just right of its
 middle, inputs arrive at its top just left of it, a file's inputs share one bus, and inputs
-from further up drop through a column gap on lanes of their own. Dots mark junctions.
+from further up drop through a column gap on lanes of their own.
 
 ## Glass
 

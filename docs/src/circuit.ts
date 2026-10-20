@@ -1,4 +1,4 @@
-import { commands, standalone } from './files'
+import { commands } from './files'
 
 // The data-flow graph as a top-down circuit. Every file is a bubble of the
 // same size on a grid of columns that fits the available width. Files that a
@@ -19,9 +19,11 @@ import { commands, standalone } from './files'
 //     below that file, drops through a column gap on a lane of its own, and
 //     joins the receiving file's track.
 // Tracks in a channel and lanes in a gap are spread so that unrelated wires
-// never overlap; where two wires of one bus meet there is a dot.
+// never overlap. A bubble narrows, down to MIN_WIDTH, when that lets all of
+// one command's inputs share a row; otherwise the row wraps.
 
 export const BUBBLE = { width: 232, height: 92 }
+const MIN_WIDTH = 176
 const MIN_GAP = 40      // between columns, and at both sides
 const MAX_GAP = 96
 const LANE = 10         // between lanes in a gap, at most
@@ -33,7 +35,7 @@ const PORT = 14         // ports' offset from a bubble's middle
 
 export interface CircuitNode { id: string; x: number; y: number }
 export interface Wire { x1: number; y1: number; x2: number; y2: number }
-export interface Circuit { nodes: CircuitNode[]; wires: Wire[]; dots: { x: number; y: number }[]; width: number; height: number }
+export interface Circuit { nodes: CircuitNode[]; wires: Wire[]; bubble: { width: number; height: number }; width: number; height: number }
 
 interface Edge { from: string; to: string }
 
@@ -115,7 +117,19 @@ function pack(intervals: { a: number; b: number }[], margin: number) {
 export function layoutCircuit(available: number): Circuit {
   const { edges, ranks, producer } = graph()
   const neighbors = order(ranks, edges)
-  const { width: W, height: H } = BUBBLE
+  const H = BUBBLE.height
+  // Narrower bubbles for the largest set of one command's fresh inputs that
+  // then fits in one row, if the full width does not fit it already.
+  let W = BUBBLE.width
+  const fits = Math.floor((available - MIN_GAP) / (W + MIN_GAP))
+  const groups = commands.map((command) => command.inputs.filter((file) => !producer.has(file)).length)
+  for (const wanted of [...new Set(groups)].sort((a, b) => b - a)) {
+    const narrow = Math.floor((available - (wanted + 1) * MIN_GAP) / wanted)
+    if (wanted > fits && narrow >= MIN_WIDTH) {
+      W = narrow
+      break
+    }
+  }
 
   {
     // As many columns as fit with the narrowest gaps; the width left over
@@ -152,12 +166,6 @@ export function layoutCircuit(available: number): Circuit {
       }
     }
     for (let index = rows.length - 1; index >= 0; index--) if (!rows[index].length) rows.splice(index, 1)
-    // Files no command touches go in the first row, or a row of their own
-    // above it.
-    for (const file of standalone) {
-      if (rows[0] && rows[0].length < columns) rows[0].push(file)
-      else rows.unshift([file])
-    }
     const row = new Map<string, number>()
     rows.forEach((files, index) => files.forEach((file) => row.set(file, index)))
 
@@ -251,15 +259,10 @@ export function layoutCircuit(available: number): Circuit {
       track.y = channelTop + channelHeight / 2 + (track.line - (channelTracks[track.channel] - 1) / 2) * TRACK
     }
 
-    // Wires and dots. A dot marks where a wire meets a track anywhere but at
-    // the track's end, where the two simply turn a corner.
+    // Wires: tracks, then the drops and lanes that join them.
     const offset = Math.max(0, (available - (columns * W + (columns + 1) * gap)) / 2)
     const wires: Wire[] = []
-    const dots: { x: number; y: number }[] = []
     const vertical = (x: number, y1: number, y2: number) => wires.push({ x1: x, y1, x2: x, y2 })
-    const meet = (x: number, track: { a: number; b: number; y: number }, ends: boolean) => {
-      if (!ends || (x > track.a + 0.5 && x < track.b - 0.5)) dots.push({ x, y: track.y })
-    }
     for (const track of tracks.values()) wires.push({ x1: track.a, y1: track.y, x2: track.b, y2: track.y })
     for (const files of rows) {
       for (const file of files) {
@@ -271,13 +274,11 @@ export function layoutCircuit(available: number): Circuit {
         if (below.length) {
           const deepest = Math.max(...below.map((track) => track.y))
           vertical(out(file), top[r] + H, deepest)
-          below.forEach((track) => meet(out(file), track, track.y === deepest))
         }
         // Into the file from its own track.
         const own = tracks.get(`to|${file}`)
         if (own) {
           vertical(into(file), own.y, top[r])
-          meet(into(file), own, true)
         }
       }
     }
@@ -286,15 +287,13 @@ export function layoutCircuit(available: number): Circuit {
       const ends = edges.filter((edge) => laneOf.get(edge) === `${lane.gap}|${lane.from}`).map((edge) => tracks.get(`to|${edge.to}`)!)
       const deepest = Math.max(...ends.map((track) => track.y))
       vertical(lane.x, start.y, deepest)
-      meet(lane.x, start, true)
-      ends.forEach((track) => meet(lane.x, track, track.y === deepest))
     }
 
     const shift = (x: number) => x + offset
     return {
       nodes: rows.flatMap((files, index) => files.map((file) => ({ id: file, x: shift(center(file) - W / 2), y: top[index] }))),
       wires: wires.map(({ x1, y1, x2, y2 }) => ({ x1: shift(x1), y1, x2: shift(x2), y2 })),
-      dots: [...new Map(dots.map((dot) => [`${dot.x},${dot.y}`, { x: shift(dot.x), y: dot.y }])).values()],
+      bubble: { width: W, height: H },
       width: available,
       height,
     }

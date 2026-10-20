@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { BUBBLE, layoutCircuit } from './circuit'
+import { layoutCircuit } from './circuit'
 import { titleCase } from './files'
 import { background, onFrame } from './scene/frames'
 import { Pan } from './scene/pan'
@@ -24,7 +23,6 @@ export function DataView({ tables, active, onMap, onLoad, onOpen }: {
   const picker = useRef<HTMLInputElement>(null)
   const target = useRef('')
   const [width, setWidth] = useState(0)
-  const [tip, setTip] = useState<{ name: string; x: number; y: number } | null>(null)
   const circuit = useMemo(() => (width ? layoutCircuit(width) : null), [width])
 
   useEffect(() => {
@@ -44,7 +42,6 @@ export function DataView({ tables, active, onMap, onLoad, onOpen }: {
       const moved = pan.step(dt)
       if (moved && world.current) world.current.style.transform = `translateY(${-pan.y}px)`
       background.y = pan.y
-      if (moved) setTip(null)
       return moved
     })
     return () => {
@@ -71,16 +68,12 @@ export function DataView({ tables, active, onMap, onLoad, onOpen }: {
         {circuit && <div className="circuit" ref={world} style={{ height: circuit.height }}>
           <svg className="wires" width={circuit.width} height={circuit.height} aria-hidden="true">
             {circuit.wires.map((wire, index) => <line key={index} {...wire} />)}
-            {circuit.dots.map((dot, index) => <circle key={index} cx={dot.x} cy={dot.y} r={3} />)}
           </svg>
           {circuit.nodes.map((node) => (
             <button key={node.id} type="button" className={`file glass ${tables[node.id] ? 'loaded' : ''}`} data-glass
-              style={{ left: node.x, top: node.y, width: BUBBLE.width, height: BUBBLE.height }}
+              style={{ left: node.x, top: node.y, ...circuit.bubble }}
               aria-label={`${titleCase(node.id)} (${node.id})`} onClick={() => choose(node.id)}>
-              <span onPointerEnter={(event) => {
-                const box = event.currentTarget.getBoundingClientRect()
-                setTip({ name: node.id, x: box.left + box.width / 2, y: box.top })
-              }} onPointerLeave={() => setTip(null)}>{titleCase(node.id)}</span>
+              <span>{titleCase(node.id)}</span>
             </button>
           ))}
         </div>}
@@ -89,7 +82,6 @@ export function DataView({ tables, active, onMap, onLoad, onOpen }: {
         const file = event.target.files?.[0]
         if (file) onLoad(target.current, file)
       }} />
-      {tip && createPortal(<span className="tooltip" style={{ left: tip.x, top: tip.y }} role="tooltip">{tip.name}</span>, document.body)}
     </section>
   )
 }

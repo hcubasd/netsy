@@ -15,7 +15,7 @@
 .banner > .bubble:only-child { margin-right: auto; }
 .bubbles { display: flex; gap: 12px; }
 .bubble:disabled { color: #6b6b6b; cursor: default; }
-.wordmark { font-size: 24px; font-weight: 700; letter-spacing: -1px; }
+.wordmark { font-size: 30px; font-weight: 700; letter-spacing: -1px; }
 
 /* One sheet of glass under the banner fills the rest of the window. */
 .sheet { position: absolute; top: var(--below-banner); left: var(--gutter); right: var(--gutter); bottom: var(--gutter); padding: var(--radius); }
@@ -46,11 +46,8 @@
 .circuit { position: relative; width: 100%; will-change: transform; }
 .wires { position: absolute; left: 0; top: 0; overflow: visible; }
 .wires line { stroke: #111; stroke-width: 1.5; stroke-linecap: square; opacity: .55; }
-.wires circle { fill: #111; opacity: .8; }
 .file { position: absolute; display: grid; place-items: center; padding: 0 var(--radius); color: #6b6b6b; font-size: 15px; font-weight: 600; line-height: 1.3; text-align: center; cursor: inherit; }
 .file.loaded { color: #000; }
-.file span { cursor: pointer; }
-.tooltip { position: fixed; z-index: 10; padding: 6px 12px; border-radius: var(--radius); background: #000; color: #fff; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; pointer-events: none; transform: translate(-50%, calc(-100% - 8px)); }
 
 /* Table: a white sheet; rows pan under a pinned header. */
 .table-view .sheet { display: grid; }
