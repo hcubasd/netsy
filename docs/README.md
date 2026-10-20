@@ -82,8 +82,7 @@ trip-weighted means; additive counts and grams are summed.
 The graph includes facility routing, parcel routing, powertrain/routing rules and
 output indicators. Optional inputs are alternatives or extensions, not a claim
 that every stage requires every displayed file. OMX remains a model input that
-the browser does not decode. Browser checks and their recorded dataset sizes
-are under `validation/results/`.
+the browser does not decode.
 
 Identifier columns in CSV remain text (including leading zeros). Parquet numeric
 identifiers exceeding JavaScript's exact integer range are rejected rather than

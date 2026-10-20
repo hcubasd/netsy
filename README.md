@@ -1,6 +1,6 @@
 # netsy
 
-NetSy (Network Emissions Synthesizer) is a general spatial resource-flow synthesizer. It turns case-specific activity,
+NetSy is a general spatial resource-flow synthesizer. It turns case-specific activity,
 facility, vehicle, timing, network, and emissions evidence into explicit transactions,
 capacity-constrained movements, directional link loads, and emissions.
 
@@ -62,15 +62,16 @@ netsy synth network-emissions --method copert # COPERT V instead of MASS-GT's em
 
 ## Reproducing MASS-GT
 
-The Dutch adapter in `cases/netherlands/` builds NetSy inputs from MASS-GT's
-own study-area data. Comparisons cover agents, SIF, shipments, freight tours,
+The Dutch case (built outside this repository, in its own directory with a `build/`
+folder and `run.sh`) builds NetSy inputs from MASS-GT's own study-area data. Comparisons cover agents, SIF, shipments, freight tours,
 parcel demand/deliveries, van matrices, road assignment and emissions. Exact
 agreement is tested where appropriate; stochastic stages use independent seeds,
-and fixes are measured separately. `validation/results/` contains the actual
-errors and differences, including the rounding-exact SIF and parcel-demand match.
+and fixes are measured separately. The comparison audit, kept outside this repository
+with its scripts and results, reports the actual errors and differences, including the
+rounding-exact SIF and parcel-demand match.
 The Dutch adapter explicitly retains the source's reversed import/export reading
 and external-zone van mapping for reference compatibility; these are not general
-core rules. See `validation/README.md` for the scope and known limitations.
+core rules.
 
 ## Model boundary
 
@@ -455,8 +456,8 @@ Optional `delivery_vehicles.csv` supplies `vehicle`, `max_load` (parcels),
 `drop_time` (hours/parcel), `speed_multiplier` relative to the time skim (or absolute `speed_kmh`), and
 `utilization`. Tours are grouped by facility, operator, vehicle and leg.
 Optional `delivery_combustion_shares.csv` uses the same tour-choice contract.
-UCC and microhub adapters are in `validation/build_scenario.py`; Dutch baseline
-builders are versioned under `cases/netherlands/`. Data files stay outside Git.
+Case adapters, including the Dutch UCC and microhub scenarios, live with their case
+data outside this repository.
 
 Assignment preserves combustion in its output strata. `road_costs.csv` can
 add a `combustion` selector, an `attribute`/`value` filter on network links, and
@@ -486,9 +487,9 @@ scenario multipliers; it is not inferred from an electric label.
 
 ## Comparisons and presentation
 
-See `validation/README.md` for reference revisions, execution repairs, seed
-sensitivity, stage-level comparisons, documented differences and reproducible
-commands. `presentation/main.pdf` summarizes only the measured comparisons.
+The comparison audit (reference revisions, execution repairs, seed sensitivity,
+stage-level comparisons and reproducible commands) and the presentation summarizing it
+are kept outside this repository.
 
 `netsy synth indicators` writes tidy `indicators.csv`: counts, quantities,
 customer versus transfer parcels, vehicle-km, and pollutant grams, plus OD/van
