@@ -39,6 +39,7 @@ Run each command in the directory holding its input files.
 ```
 netsy synth agents --seed 1       # zones + size totals + size classes -> agents.gpkg
 netsy synth shipments --seed 1    # agents + zones + skims + shipment tables -> shipments.gpkg
+netsy synth tours --seed 1        # shipments + zones + skims + tour tables -> tours.gpkg, tour_shipments.csv
 netsy synth od-flows               # production/attraction marginals + OD prior -> od_flows.csv
 netsy synth facility-chains        # direct transactions + facilities -> transaction_legs.gpkg
 netsy synth network-loads --seed 1 # transaction lines + network inputs -> network_loads.csv
@@ -46,7 +47,7 @@ netsy synth network-emissions      # network loads + COPERT inputs -> network_em
 ```
 
 An existing output file is only replaced with `--force`.
-`agents`, `shipments`, and `network-loads` make random draws; pass `--seed` to reproduce them.
+`agents`, `shipments`, `tours`, and `network-loads` make random draws; pass `--seed` to reproduce them.
 
 `network-loads` reads `shipments.gpkg` by default. Pass
 `--transactions transaction_legs.gpkg` to route facility-mediated transaction legs instead:
@@ -161,6 +162,33 @@ an end), and `vehicle:<vehicle>`.
 
 `facility-chains` and `network-loads` still count quantities in whole units, so shipments of
 fractional quantities, such as tonnes, do not pass them yet.
+
+### Tours
+
+`tours` forms vehicle tours from the shipments the way MASS-GT's tour formation does. Shipments
+are carried by carriers: a carrier based at each facility of the carrier types, and a number of
+independent carriers. Each carrier chains its shipments into tours with two end-tour logits.
+
+| file | fields | purpose |
+|---|---|---|
+| `shipments.gpkg` | the output of `shipments` | What to carry. |
+| `zones.gpkg`, `skims.omx`, `facilities.gpkg` (optional) | as for `shipments` | Where stops are, how far apart, and where carriers are based. |
+| `shipment_vehicles.csv` | `vehicle`, `capacity`, ... | Each vehicle's capacity. |
+| `tour_settings.csv` | `setting`, `value` | `independent_carriers`, `max_shipments`, `max_duration` (h), `max_proximity` (km), `capacity_slack`, `mean_dwell_time` (h), and any number of `carrier_facility_type` and `same_stratum` rows. |
+| `end_tour_first.csv`, `end_tour_later.csv` | key columns, `term`, `value` | The logits of ending a tour after its first shipment and after each later one. |
+
+End-tour terms are `constant`, `duration` and `sqrt_duration` (the tour's hours so far),
+`utilization` and `squared_utilization` (the share of its vehicle's capacity used), `proximity`
+(km to the nearest shipment left), `log_stops`, `origin:<kind>` and `destination:<kind>`,
+`zone:<zone column>` (the larger value at the two zones), `vehicle:<vehicle>` and
+`resource:<resource>` (the resource carried most). As in MASS-GT, the kinds, zones and vehicle are
+those of the tour's first shipment.
+
+`tours.gpkg` has one trip per row: `tour_id`, `trip` (from 1), `carrier`, `vehicle`, `resource`
+(empty on the empty return), the other strata of the tour's first shipment, `shipments`,
+`tour_quantity`, `quantity` (on board), `tour_departure`, `departure` and `arrival` (hours),
+the trip's zones, and a line between them. `tour_shipments.csv` names the tour that carries each
+part of each shipment: `transaction_id`, `tour_id`, `quantity`.
 
 ### Facility-mediated transactions
 
@@ -309,10 +337,32 @@ multinomial logit over its stratum's windows.
 With MASS-GT's Dutch inputs, regions are its superzones, flow types its twelve (external ones
 split by direction), and the shipment strata its NSTR commodity, logistic segment and flow-type
 id. Its exports read the commodity matrix's external-to-internal cells and its imports the
-reverse, which the totals reproduce. Two of its quirks are not reproduced: a parcel origin depot
+reverse, a bug that the totals reproduce, as the reference run does. Two of its quirks are not reproduced: a parcel origin depot
 that equals the destination depot moves to its neighbour in MASS-GT's depot list, where NetSy
 draws among the operator's other depots, and its import draws reuse one random stream for every
 external zone.
+
+Tours are formed carrier by carrier. Each shipment is split into equal parts that fit its
+vehicle; a part with an end at a facility of a carrier type goes to that facility's carrier (one
+of the two at random if both are), and any other to a random independent carrier. A based carrier
+takes its parts shortest first, an independent one in random order. A tour starts with the first
+part left. While it has fewer than `max_shipments` parts after its first, lasts less than
+`max_duration`, is less than full, and has a part left within `max_proximity`, a binary logit
+decides whether it ends: `end_tour_first.csv` after its first part, `end_tour_later.csv` after
+each later one. If it goes on, it takes the nearest part (a part of its vehicle counts as half as
+far) of the same `same_stratum` values whose weight keeps the tour under `capacity_slack` times
+its capacity and whose delivery window neighbours the tour's. Its stops are ordered loading first
+and then unloading, nearest first, starting from the carrier's base; single stops are then moved
+where that shortens the tour without unloading before loading. A tour returns empty to its
+start. With one dwell time per tour, drawn uniformly up to twice `mean_dwell_time`, its departure
+time puts its trips' arrivals, on average, midway between their windows' bounds; as in MASS-GT,
+the window of a stop is compared with the arrival at the stop after it.
+
+With MASS-GT's Dutch inputs, carriers are based at distribution centres, tours keep to one
+logistic segment, and the transshipment and urban indicators are zone columns. Not reproduced:
+MASS-GT's transshipment indicator leaves out an end at a distribution centre in a terminal zone,
+and it drops the DC-loading indicator of a shipment unloaded in a terminal zone; parcel
+shipments of nominal flow types 3, 5 and 7 count as loaded at a distribution centre there.
 
 Network loads apportion each resource's transaction total exactly across departure
 intervals. Within an interval, NetSy draws a provider and seed consumer from residual

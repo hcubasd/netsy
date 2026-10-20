@@ -283,3 +283,21 @@ def check_delivery_windows(table):
     if (table["end"] <= table["start"]).any():
         raise ValueError("every window must end after it starts")
     return table
+
+
+def check_tour_settings(table):
+    """`tour_settings.csv`, with a `setting` and a `value` in every row."""
+    _required(table, ("setting", "value"))
+    _filled(table, ("setting", "value"))
+    return table
+
+
+def check_end_tour(table):
+    """An end-tour coefficient table with its values as numbers: per key
+    (any shipment strata, or none) and `term`, a `value`.
+    """
+    _required(table, ("term", "value"))
+    keys = [column for column in table.columns if column not in ("term", "value")]
+    _filled(table, keys + ["term"])
+    _unique(table, keys + ["term"], "key and term")
+    return _any_numbers(table, ("value",))

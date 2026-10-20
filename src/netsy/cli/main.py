@@ -12,6 +12,10 @@ SYNTH_COMMANDS = {
         "netsy.cli.synth_shipments",
         "zones.gpkg + agents.gpkg + skims.omx + shipment CSVs -> shipments.gpkg",
     ),
+    "tours": (
+        "netsy.cli.synth_tours",
+        "shipments.gpkg + zones.gpkg + skims.omx + tour CSVs -> tours.gpkg + tour_shipments.csv",
+    ),
     "facility-chains": (
         "netsy.cli.synth_facility_chains",
         "shipments.gpkg + facilities.gpkg + facility_chain_steps.csv -> transaction_legs.gpkg",
@@ -39,7 +43,7 @@ def build_parser():
     for name, (module, description) in SYNTH_COMMANDS.items():
         command = commands.add_parser(name, help=description, description=description)
         command.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
-        if name in {"agents", "shipments", "network-loads"}:
+        if name in {"agents", "shipments", "tours", "network-loads"}:
             command.add_argument("--seed", type=int, help="seed the random draws, so the same inputs give the same output")
         if name == "agents":
             command.add_argument(

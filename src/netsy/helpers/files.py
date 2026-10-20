@@ -64,7 +64,7 @@ def read_facilities(path):
     return _checked(path, _read_geopackage(path), validate.check_facilities)
 
 
-# The tables shipments reads, by file name, with the check of each.
+# The tables shipments and tours read, by file name, with the check of each.
 SHIPMENT_TABLES = {
     "production_rates.csv": validate.check_rates,
     "consumption_rates.csv": validate.check_rates,
@@ -76,9 +76,17 @@ SHIPMENT_TABLES = {
     "vehicle_choice.csv": lambda table: validate.check_choice(table, "vehicle"),
     "delivery_windows.csv": validate.check_delivery_windows,
     "delivery_choice.csv": lambda table: validate.check_choice(table, "window"),
+    "tour_settings.csv": validate.check_tour_settings,
+    "end_tour_first.csv": validate.check_end_tour,
+    "end_tour_later.csv": validate.check_end_tour,
 }
 
 
 def read_table(path):
-    """The shipment input table at `path`, validated by its file name."""
+    """The input table at `path`, validated by its file name."""
     return _checked(path, _read_csv(path), SHIPMENT_TABLES[os.path.basename(path)])
+
+
+def read_shipments(path):
+    """The shipments at `path` as a GeoDataFrame."""
+    return _read_geopackage(path)

@@ -24,6 +24,15 @@ export const commands: Command[] = [
     optional: ['facilities.gpkg', 'delivery_windows.csv', 'delivery_choice.csv'],
     outputs: ['shipments.gpkg'],
   },
+  {
+    name: 'tours',
+    inputs: [
+      'shipments.gpkg', 'zones.gpkg', 'skims.omx', 'shipment_vehicles.csv', 'tour_settings.csv',
+      'end_tour_first.csv', 'end_tour_later.csv',
+    ],
+    optional: ['facilities.gpkg'],
+    outputs: ['tours.gpkg', 'tour_shipments.csv'],
+  },
   { name: 'od-flows', inputs: ['productions.csv', 'attractions.csv', 'od_prior.csv'], outputs: ['od_flows.csv'] },
   { name: 'facility-chains', inputs: ['shipments.gpkg', 'facilities.gpkg', 'facility_chain_steps.csv'], outputs: ['transaction_legs.gpkg'] },
   {
