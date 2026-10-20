@@ -1,0 +1,86 @@
+diff --git a/src/calculation/traf/module_traf.py b/src/calculation/traf/module_traf.py
+index 3301133..38cf163 100644
+--- a/src/calculation/traf/module_traf.py
++++ b/src/calculation/traf/module_traf.py
+@@ -855,46 +855,45 @@ def actually_run_module(
+             prevVanHybrid = []
+ 
+             # Route search vans
+-            if nCPU > 1:
+-                for r in range(varDict['N_MULTIROUTE']):
++            for r in range(varDict['N_MULTIROUTE']):
++
++                logger.debug(
++                    f"\t\tRoute search (vans - hybrid combustion - multirouting part {r+1})...")
+ 
+-                    logger.debug(
+-                        f"\t\tRoute search (vans - hybrid combustion - multirouting part {r+1})...")
++                # The network with costs between nodes (vans)
++                csgraphVanHybrid = lil_matrix((nNodes, nNodes))
++                csgraphVanHybrid[
++                    np.array(MRDHlinks['A']),
++                    np.array(MRDHlinks['B'])] = costVanHybrid
+ 
+-                    # The network with costs between nodes (vans)
+-                    csgraphVanHybrid = lil_matrix((nNodes, nNodes))
++                if varDict['N_MULTIROUTE'] > 1:
++                    np.random.seed(r * seeds['traf_multiroute'])
+                     csgraphVanHybrid[
+                         np.array(MRDHlinks['A']),
+-                        np.array(MRDHlinks['B'])] = costVanHybrid
+-    
+-                    if varDict['N_MULTIROUTE'] > 1:
+-                        np.random.seed(r * seeds['traf_multiroute'])
+-                        csgraphVanHybrid[
+-                            np.array(MRDHlinks['A']),
+-                            np.array(MRDHlinks['B'])] *= (0.9 + 0.2 * np.random.rand(len(MRDHlinks)))
+-
+-                    # Execute the Dijkstra route search
+-                    if nCPU == 1:
+-                        prevVanHybrid.append(calc_prev(csgraphVanHybrid, nNodes, [indices, 0]))
+-
+-                    else:
+-                        with mp.Pool(nCPU) as p:
+-                            prevVanHybridPerCPU = p.map(functools.partial(
+-                                calc_prev,
+-                                csgraphVanHybrid,
+-                                nNodes), indicesPerCPU)
+-                        prevVanHybrid.append(np.zeros((nOrigSelection, nNodes), dtype=np.int32))
+-                        for cpu in range(nCPU):
+-                            for i in range(len(indicesPerCPU[cpu][0])):
+-                                prevVanHybrid[r][origSelectionPerCPU[cpu][i], :] = prevVanHybridPerCPU[cpu][i, :]
+-
+-                        # Make some space available on the RAM
+-                        del prevVanHybridPerCPU
+-
+-                    if root is not None:
+-                        root.progressBar['value'] = (
+-                            33.0 +
+-                            (60.0 - 33.0) * (1 + r) / varDict['N_MULTIROUTE'])
++                        np.array(MRDHlinks['B'])] *= (0.9 + 0.2 * np.random.rand(len(MRDHlinks)))
++
++                # Execute the Dijkstra route search
++                if nCPU == 1:
++                    prevVanHybrid.append(calc_prev(csgraphVanHybrid, nNodes, [indices, 0]))
++
++                else:
++                    with mp.Pool(nCPU) as p:
++                        prevVanHybridPerCPU = p.map(functools.partial(
++                            calc_prev,
++                            csgraphVanHybrid,
++                            nNodes), indicesPerCPU)
++                    prevVanHybrid.append(np.zeros((nOrigSelection, nNodes), dtype=np.int32))
++                    for cpu in range(nCPU):
++                        for i in range(len(indicesPerCPU[cpu][0])):
++                            prevVanHybrid[r][origSelectionPerCPU[cpu][i], :] = prevVanHybridPerCPU[cpu][i, :]
++
++                    # Make some space available on the RAM
++                    del prevVanHybridPerCPU
++
++                if root is not None:
++                    root.progressBar['value'] = (
++                        33.0 +
++                        (60.0 - 33.0) * (1 + r) / varDict['N_MULTIROUTE'])
+ 
+             # Make some space available on the RAM
+             del csgraphVanHybrid

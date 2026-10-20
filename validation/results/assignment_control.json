@@ -1,0 +1,39 @@
+{
+  "source": "MASS-GT NL_REF tours, parcel schedule and original service matrices",
+  "links": 158806,
+  "max_abs_link_trips": 8.467001691043379,
+  "sum_link_trip_difference": 5.817721471190453,
+  "emissions": {
+    "co2": {
+      "massgt_grams": 16792874264.064695,
+      "netsy_grams": 16795387299.104614,
+      "difference_grams": 2513035.0399188995,
+      "predicted_urban_parcel_fix_grams": 2513034.79202087,
+      "residual_grams": 0.2478980296291411
+    },
+    "so2": {
+      "massgt_grams": 100232.73510662523,
+      "netsy_grams": 100247.996454926,
+      "difference_grams": 15.261348300773534,
+      "predicted_urban_parcel_fix_grams": 15.261344890815,
+      "residual_grams": 3.4099585342062255e-06
+    },
+    "pm": {
+      "massgt_grams": 1755983.2146764058,
+      "netsy_grams": 1756695.410632173,
+      "difference_grams": 712.1959557672963,
+      "predicted_urban_parcel_fix_grams": 712.1960949047,
+      "residual_grams": -0.000139137403721179
+    },
+    "nox": {
+      "massgt_grams": 106577642.15704255,
+      "netsy_grams": 106589596.90855712,
+      "difference_grams": 11954.751514568925,
+      "predicted_urban_parcel_fix_grams": 11954.720164471748,
+      "residual_grams": 0.03135009717698267
+    }
+  },
+  "max_abs_non_connector_link_trips": 2.034264980466105e-05,
+  "connector_links_with_difference_above_0_001": 72,
+  "non_connector_links_with_difference_above_0_001": 0
+}

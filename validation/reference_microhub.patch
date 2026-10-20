@@ -1,0 +1,23 @@
+diff --git a/src/calculation/parcel_dmnd/module_parcel_dmnd.py b/src/calculation/parcel_dmnd/module_parcel_dmnd.py
+index b00f99b..534add1 100644
+--- a/src/calculation/parcel_dmnd/module_parcel_dmnd.py
++++ b/src/calculation/parcel_dmnd/module_parcel_dmnd.py
+@@ -197,7 +197,7 @@ def actually_run_module(
+                             zones.at[i, "MH_zone"] = (
+                                 closest_MH.loc[invZoneDict[i], "MH_AREA"])
+                         else:
+-                            zones.at[zones['ZEZ'] != 2, "MH_zone"] = 0
++                            zones.loc[zones['ZEZ'] != 2, "MH_zone"] = 0
+ 
+                 # Individual CEP
+                 else:
+@@ -249,8 +249,7 @@ def actually_run_module(
+                             closest_MH = pd.DataFrame(columns=["MH_ID", "MH_AREA"])
+ 
+                             # Find for each zone the closest MH with MH_ID
+-                            closest_MH_pos = pd.DataFrame
+-                            (mh_to_zone_skim).idxmin(axis=1) + 1
++                            closest_MH_pos = pd.DataFrame(mh_to_zone_skim).idxmin(axis=1) + 1
+                             closest_MH["MH_ID"] = [
+                                 selectedHubsByCEP[courier][closest_MH_pos[x] - 1]
+                                 for x in closest_MH_pos.index]

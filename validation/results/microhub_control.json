@@ -1,0 +1,20 @@
+{
+  "minimal_repair": {
+    "massgt_leg_parcels": 235915,
+    "netsy_leg_parcels": 235915,
+    "massgt_hub_parcels": 7208,
+    "netsy_hub_parcels": 7208,
+    "max_abs_hub_destination_parcels": 391.0,
+    "total_absolute_pair_difference": 13564.0,
+    "hub_destination_pairs": 155
+  },
+  "corrected_selection": {
+    "massgt_leg_parcels": 235915,
+    "netsy_leg_parcels": 235915,
+    "massgt_hub_parcels": 7208,
+    "netsy_hub_parcels": 7208,
+    "max_abs_hub_destination_parcels": 0.0,
+    "total_absolute_pair_difference": 0.0,
+    "hub_destination_pairs": 81
+  }
+}

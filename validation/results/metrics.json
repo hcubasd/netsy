@@ -1,0 +1,363 @@
+{
+  "massgt_reference": {
+    "agents": {
+      "count": 86004,
+      "size": 1034015.0
+    },
+    "shipments": {
+      "count": 118961,
+      "tonnes": 401438.24245657143,
+      "mean_tonnes": 3.3745365494285644,
+      "vehicle_shares": {
+        "tractor_trailer": 0.5121762594463731,
+        "truck_small": 0.19906523986852834,
+        "truck_trailer_large": 0.17448575583594622,
+        "truck_medium": 0.05480787821218719,
+        "truck_trailer_small": 0.050041610275636556,
+        "special_vehicle": 0.005463975588638293,
+        "truck_large": 0.0039592807726902095
+      }
+    },
+    "tours": {
+      "tours": 60062,
+      "trips": 213263,
+      "vkt": 20907174.58192095,
+      "tonne_km": 62527791.54408762,
+      "empty_vkt": 8725615.885710813
+    },
+    "deliveries": {
+      "tours": 1283,
+      "trips": 32745,
+      "vkt": 92281.86697873473,
+      "leg_parcels": 228707
+    },
+    "parcel_demand": 228707,
+    "sif": {
+      "pairs": 18490,
+      "max_abs_tonnes_year": 0.0004999861594114918,
+      "max_abs_after_rounding": 0.0
+    },
+    "loads": {
+      "link_trips": 49469952.474999994,
+      "vkt": 43723853.46240987
+    },
+    "emissions_grams": {
+      "co2": 16792874264.064695,
+      "so2": 100232.73510662523,
+      "pm": 1755983.2146764058,
+      "nox": 106577642.15704255
+    }
+  },
+  "netsy_saved_baseline": {
+    "agents": {
+      "count": 84532,
+      "size": 1039768.0
+    },
+    "shipments": {
+      "count": 118637,
+      "tonnes": 401438.24230114836,
+      "mean_tonnes": 3.3837524743642233,
+      "vehicle_shares": {
+        "tractor_trailer": 0.5114256092112915,
+        "truck_small": 0.20185102455389128,
+        "truck_trailer_large": 0.1740013655099168,
+        "truck_medium": 0.053777489316149264,
+        "truck_trailer_small": 0.04984954103694463,
+        "special_vehicle": 0.005436752446538601,
+        "truck_large": 0.0036582179252678338
+      }
+    },
+    "tours": {
+      "tours": 59929,
+      "trips": 213748,
+      "vkt": 20949008.933633536,
+      "tonne_km": 62555196.590176664,
+      "empty_vkt": 8594473.384414598
+    },
+    "deliveries": {
+      "tours": 1283,
+      "trips": 32745,
+      "vkt": 72656.39748186618,
+      "leg_parcels": 228707
+    },
+    "parcel_demand": 228707,
+    "loads": {
+      "rows": 6089837,
+      "link_trips": 49339109.56091256,
+      "vkt": 43747092.70416852
+    },
+    "emissions_grams": {
+      "co2": 16768237649.302143,
+      "nox": 106550090.40648094,
+      "pm": 1757874.499323969,
+      "so2": 100084.1112783463
+    }
+  },
+  "seeds": {
+    "1": {
+      "agents": {
+        "count": 84532,
+        "size": 1039768.0
+      },
+      "shipments": {
+        "count": 118637,
+        "tonnes": 401438.24230114836,
+        "mean_tonnes": 3.3837524743642233,
+        "vehicle_shares": {
+          "tractor_trailer": 0.5114256092112915,
+          "truck_small": 0.20185102455389128,
+          "truck_trailer_large": 0.1740013655099168,
+          "truck_medium": 0.053777489316149264,
+          "truck_trailer_small": 0.04984954103694463,
+          "special_vehicle": 0.005436752446538601,
+          "truck_large": 0.0036582179252678338
+        }
+      },
+      "tours": {
+        "tours": 59929,
+        "trips": 213748,
+        "vkt": 20949008.933633536,
+        "tonne_km": 62555196.590176664,
+        "empty_vkt": 8594473.384414598
+      },
+      "deliveries": {
+        "tours": 1283,
+        "trips": 32745,
+        "vkt": 72656.39748186618,
+        "leg_parcels": 228707
+      },
+      "parcel_demand": 228707,
+      "loads": {
+        "rows": 6089837,
+        "link_trips": 49339109.56091256,
+        "vkt": 43747092.70416852
+      },
+      "emissions_grams": {
+        "co2": 16768237649.302143,
+        "nox": 106550090.40648094,
+        "pm": 1757874.499323969,
+        "so2": 100084.1112783463
+      }
+    },
+    "2": {
+      "agents": {
+        "count": 85849,
+        "size": 1033511.0
+      },
+      "shipments": {
+        "count": 118602,
+        "tonnes": 401438.24230114836,
+        "mean_tonnes": 3.3847510354053756,
+        "vehicle_shares": {
+          "tractor_trailer": 0.5084146978971686,
+          "truck_small": 0.20077233098935937,
+          "truck_trailer_large": 0.17412016660764573,
+          "truck_medium": 0.055260450919883304,
+          "truck_trailer_small": 0.05188782651220047,
+          "special_vehicle": 0.005463651540446198,
+          "truck_large": 0.004080875533296235
+        }
+      },
+      "tours": {
+        "tours": 60271,
+        "trips": 214048,
+        "vkt": 21091331.15683859,
+        "tonne_km": 62941421.44721717,
+        "empty_vkt": 8684603.761769623
+      },
+      "deliveries": {
+        "tours": 1283,
+        "trips": 32745,
+        "vkt": 72656.39748186618,
+        "leg_parcels": 228707
+      },
+      "parcel_demand": 228707
+    },
+    "3": {
+      "agents": {
+        "count": 84899,
+        "size": 1039856.0
+      },
+      "shipments": {
+        "count": 118345,
+        "tonnes": 401438.24230114836,
+        "mean_tonnes": 3.392101417898081,
+        "vehicle_shares": {
+          "tractor_trailer": 0.509873674426465,
+          "truck_small": 0.20120833157294352,
+          "truck_trailer_large": 0.1742954919937471,
+          "truck_medium": 0.05444251975157379,
+          "truck_trailer_small": 0.05127381807427437,
+          "special_vehicle": 0.004909375132029236,
+          "truck_large": 0.003996789048967003
+        }
+      },
+      "tours": {
+        "tours": 59802,
+        "trips": 213143,
+        "vkt": 20878161.617400073,
+        "tonne_km": 62405665.77710748,
+        "empty_vkt": 8578591.497392558
+      },
+      "deliveries": {
+        "tours": 1283,
+        "trips": 32745,
+        "vkt": 72656.39748186618,
+        "leg_parcels": 228707
+      },
+      "parcel_demand": 228707
+    }
+  },
+  "ucc": {
+    "shipments": {
+      "count": 118637,
+      "tonnes": 401438.24230114836,
+      "mean_tonnes": 3.3837524743642233,
+      "vehicle_shares": {
+        "tractor_trailer": 0.5114256092112915,
+        "truck_small": 0.20185102455389128,
+        "truck_trailer_large": 0.1740013655099168,
+        "truck_medium": 0.053777489316149264,
+        "truck_trailer_small": 0.04984954103694463,
+        "special_vehicle": 0.005436752446538601,
+        "truck_large": 0.0036582179252678338
+      }
+    },
+    "tours": {
+      "tours": 62709,
+      "trips": 220541,
+      "vkt": 20950197.16337701,
+      "tonne_km": 62767375.91313349,
+      "empty_vkt": 8583503.58983086
+    },
+    "deliveries": {
+      "tours": 1505,
+      "trips": 35488,
+      "vkt": 77516.98744425923,
+      "leg_parcels": 240044,
+      "customer_parcels": 228707
+    },
+    "parcel_demand": 228707,
+    "routing": {
+      "legs": 120276,
+      "consignments": 118637,
+      "routed_consignments": 1622,
+      "leg_tonnes": 406072.70891604474
+    },
+    "loads": {
+      "rows": 7351743,
+      "link_trips": 49420913.87791726,
+      "vkt": 43924888.82537528
+    },
+    "emissions_grams": {
+      "co2": 16712040980.261965,
+      "nox": 106078802.57892124,
+      "pm": 1746032.9550624061,
+      "so2": 99740.63733224107
+    }
+  },
+  "microhub": {
+    "shipments": {
+      "count": 118637,
+      "tonnes": 401438.24230114836,
+      "mean_tonnes": 3.3837524743642233,
+      "vehicle_shares": {
+        "tractor_trailer": 0.5114256092112915,
+        "truck_small": 0.20185102455389128,
+        "truck_trailer_large": 0.1740013655099168,
+        "truck_medium": 0.053777489316149264,
+        "truck_trailer_small": 0.04984954103694463,
+        "special_vehicle": 0.005436752446538601,
+        "truck_large": 0.0036582179252678338
+      }
+    },
+    "tours": {
+      "tours": 59929,
+      "trips": 213748,
+      "vkt": 20949008.933633536,
+      "tonne_km": 62555196.590176664,
+      "empty_vkt": 8594473.384414598
+    },
+    "deliveries": {
+      "tours": 1811,
+      "trips": 33481,
+      "vkt": 72907.04898001999,
+      "leg_parcels": 235915,
+      "customer_parcels": 228707
+    },
+    "parcel_demand": 228707,
+    "loads": {
+      "rows": 6092452,
+      "link_trips": 49341757.56091256,
+      "vkt": 43747290.89873758
+    },
+    "emissions_grams": {
+      "co2": 16768253656.746284,
+      "nox": 106551017.22492912,
+      "pm": 1757838.9600973239,
+      "so2": 100084.18126443299
+    }
+  },
+  "massgt_ucc": {
+    "tours": {
+      "tours": 62931,
+      "trips": 219216,
+      "vkt": 20953473.230638318,
+      "tonne_km": 62752150.70340006,
+      "empty_vkt": 8755994.029326491
+    },
+    "deliveries": {
+      "tours": 1760,
+      "trips": 37359,
+      "vkt": 102444.00994574279,
+      "leg_parcels": 240026
+    },
+    "loads": {
+      "link_trips": 49876583.951,
+      "vkt": 44077803.70050658
+    },
+    "emissions_grams": {
+      "co2": 16760967609.049232,
+      "so2": 100035.34497416235,
+      "pm": 1752585.7622081176,
+      "nox": 106292970.83798695
+    }
+  },
+  "contributions": {
+    "savings": {
+      "deliveries": {
+        "tours": 1332,
+        "trips": 31681,
+        "vkt": 65221.981849856675,
+        "leg_parcels": 228707
+      },
+      "parcel_demand": 228707
+    },
+    "copert": {
+      "tours": {
+        "tours": 59929,
+        "trips": 213748,
+        "vkt": 20949008.933633536,
+        "tonne_km": 62555196.590176664,
+        "empty_vkt": 8594473.384414598
+      },
+      "deliveries": {
+        "tours": 1283,
+        "trips": 32745,
+        "vkt": 72656.39748186618,
+        "leg_parcels": 228707
+      },
+      "loads": {
+        "rows": 7703969,
+        "link_trips": 49339109.56091256,
+        "vkt": 43747092.70416853
+      },
+      "emissions_grams": {
+        "co": 1007986.5919068746,
+        "co2": 18140256328.27431,
+        "nox": 4959116.233669419,
+        "pm": 79800.88581719511
+      }
+    }
+  }
+}

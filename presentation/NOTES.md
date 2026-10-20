@@ -1,0 +1,13 @@
+# Presenter notes
+
+- The reference is the local MASS-GT `sweden-run` commit `4f727c3`, not untouched upstream main. Its earlier four compatibility/correctness changes are already present.
+- Actors, shipments and tours use independent random streams. Three NetSy seeds show sensitivity; these ranges are not statistical proof of equivalence. SIF agrees at the source's three-decimal rounding, and parcel demand agrees exactly.
+- The stop-index correction and savings contribution are separated: raw parcel VKT 92,281.9; corrected port 72,656.4; savings 65,222.0. Savings is 10.2% below the corrected port, with 3.8% more tours.
+- Assignment control uses the original MASS-GT trips and original van matrices. Non-connector per-link errors are below 0.000021 trips. The 72 connector discrepancies include tie choices and one arc beyond the source's eight-neighbour lookup. Accumulating rather than overwriting urban parcel emissions adds 2.513 tonnes of CO2/day; the remaining aggregate residual is about 0.25 grams.
+- UCC is a combined scenario comparison, not a controlled bug ablation: independent shipments, corrected vehicle/fuel logic, consistent hybrid routing, corrected parcel routing, and explicit outbound hub pooling. Do not attribute its entire difference to one fix or claim all differences are random.
+- Microhubs are MASS-GT functionality. Corrected selection gives identical quantities on all 81 hub–recipient pairs (7,208 parcels). NetSy supplies downstream hub-aware operations; the source does not provide an equivalent schedule for validating those tours. Bicycle capacity/speed are supplied-mode parameters; bulk transfer time is an explicit uncalibrated assumption. Motorways are excluded from the bicycle road class.
+- COPERT totals are a declared model/fleet sensitivity on identical NetSy seed-1 trips, not empirical validation or a reproduction of the advisor paper's observed case. The assumed Euro VI / Euro 6 fleet differs from the source's average fleet factors. The network comparison assumes flat grades. The speed curve is logarithmic to show its shape alongside the legacy factor.
+- No Dutch non-exhaust total is estimated. Separate factors and scenario multipliers are supported, including battery-weight sensitivities, but no unsupported speed/weight relationship is inferred.
+- The standard freight/parcel/service pipeline, UCC and one collaborative microhub configuration are covered. Optional crowdshipping and selected-link analyses are not benchmarked; generic indicators replace the bespoke reporting layout.
+
+Detailed numbers, patches and methods: `../validation/README.md`, `../validation/results/`.

@@ -1,0 +1,14 @@
+{
+  "reported_pollutants": [
+    "co",
+    "co2",
+    "nox",
+    "pm"
+  ],
+  "omitted_incomplete": [
+    "n2o",
+    "nh3"
+  ],
+  "energy_not_mass": "EC is used only to derive CO2 at 74.1 g/MJ; never reported as grams of EC",
+  "vehicle_grid_rows": "{('co', 'Heavy Duty Trucks Articulated 14 - 20 t Diesel Euro VI D/E'): 21, ('co', 'Heavy Duty Trucks Articulated 34 - 40 t Diesel Euro VI D/E'): 21, ('co', 'Heavy Duty Trucks Articulated 40 - 50 t Diesel Euro VI D/E'): 21, ('co', 'Heavy Duty Trucks Rigid 26 - 28 t Diesel Euro VI D/E'): 21, ('co', 'Heavy Duty Trucks Rigid 28 - 32 t Diesel Euro VI D/E'): 21, ('co', 'Heavy Duty Trucks Rigid 7,5 - 12 t Diesel Euro VI D/E'): 21, ('co', 'Heavy Duty Trucks Rigid >32 t Diesel Euro VI D/E'): 21, ('co', 'Light Commercial Vehicles N1-III Diesel Euro 6 d/e'): 21, ('co2', 'Heavy Duty Trucks Articulated 14 - 20 t Diesel Euro VI D/E'): 21, ('co2', 'Heavy Duty Trucks Articulated 34 - 40 t Diesel Euro VI D/E'): 21, ('co2', 'Heavy Duty Trucks Articulated 40 - 50 t Diesel Euro VI D/E'): 21, ('co2', 'Heavy Duty Trucks Rigid 26 - 28 t Diesel Euro VI D/E'): 21, ('co2', 'Heavy Duty Trucks Rigid 28 - 32 t Diesel Euro VI D/E'): 21, ('co2', 'Heavy Duty Trucks Rigid 7,5 - 12 t Diesel Euro VI D/E'): 21, ('co2', 'Heavy Duty Trucks Rigid >32 t Diesel Euro VI D/E'): 21, ('co2', 'Light Commercial Vehicles N1-III Diesel Euro 6 d/e'): 21, ('nox', 'Heavy Duty Trucks Articulated 14 - 20 t Diesel Euro VI D/E'): 21, ('nox', 'Heavy Duty Trucks Articulated 34 - 40 t Diesel Euro VI D/E'): 21, ('nox', 'Heavy Duty Trucks Articulated 40 - 50 t Diesel Euro VI D/E'): 21, ('nox', 'Heavy Duty Trucks Rigid 26 - 28 t Diesel Euro VI D/E'): 21, ('nox', 'Heavy Duty Trucks Rigid 28 - 32 t Diesel Euro VI D/E'): 21, ('nox', 'Heavy Duty Trucks Rigid 7,5 - 12 t Diesel Euro VI D/E'): 21, ('nox', 'Heavy Duty Trucks Rigid >32 t Diesel Euro VI D/E'): 21, ('nox', 'Light Commercial Vehicles N1-III Diesel Euro 6 d/e'): 21, ('pm', 'Heavy Duty Trucks Articulated 14 - 20 t Diesel Euro VI D/E'): 21, ('pm', 'Heavy Duty Trucks Articulated 34 - 40 t Diesel Euro VI D/E'): 21, ('pm', 'Heavy Duty Trucks Articulated 40 - 50 t Diesel Euro VI D/E'): 21, ('pm', 'Heavy Duty Trucks Rigid 26 - 28 t Diesel Euro VI D/E'): 21, ('pm', 'Heavy Duty Trucks Rigid 28 - 32 t Diesel Euro VI D/E'): 21, ('pm', 'Heavy Duty Trucks Rigid 7,5 - 12 t Diesel Euro VI D/E'): 21, ('pm', 'Heavy Duty Trucks Rigid >32 t Diesel Euro VI D/E'): 21, ('pm', 'Light Commercial Vehicles N1-III Diesel Euro 6 d/e'): 21}"
+}
