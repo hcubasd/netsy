@@ -20,6 +20,10 @@ SYNTH_COMMANDS = {
         "netsy.cli.synth_facility_chains",
         "shipments.gpkg + facilities.gpkg + facility_chain_steps.csv -> transaction_legs.gpkg",
     ),
+    "od-marginals": (
+        "netsy.cli.synth_od_marginals",
+        "location_attributes.csv + marginal_coefficients.csv + od_prior.csv -> productions.csv + attractions.csv",
+    ),
     "od-flows": (
         "netsy.cli.synth_od_flows",
         "productions.csv + attractions.csv + od_prior.csv -> od_flows.csv",

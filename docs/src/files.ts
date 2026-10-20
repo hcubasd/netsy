@@ -33,6 +33,11 @@ export const commands: Command[] = [
     optional: ['facilities.gpkg'],
     outputs: ['tours.gpkg', 'tour_shipments.csv'],
   },
+  {
+    name: 'od-marginals',
+    inputs: ['location_attributes.csv', 'marginal_coefficients.csv', 'od_prior.csv'],
+    outputs: ['productions.csv', 'attractions.csv'],
+  },
   { name: 'od-flows', inputs: ['productions.csv', 'attractions.csv', 'od_prior.csv'], outputs: ['od_flows.csv'] },
   { name: 'facility-chains', inputs: ['shipments.gpkg', 'facilities.gpkg', 'facility_chain_steps.csv'], outputs: ['transaction_legs.gpkg'] },
   {

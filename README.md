@@ -40,7 +40,8 @@ Run each command in the directory holding its input files.
 netsy synth agents --seed 1       # zones + size totals + size classes -> agents.gpkg
 netsy synth shipments --seed 1    # agents + zones + skims + shipment tables -> shipments.gpkg
 netsy synth tours --seed 1        # shipments + zones + skims + tour tables -> tours.gpkg, tour_shipments.csv
-netsy synth od-flows               # production/attraction marginals + OD prior -> od_flows.csv
+netsy synth od-marginals           # location attributes + coefficients + OD prior -> productions, attractions
+netsy synth od-flows               # productions + attractions + OD prior -> od_flows.csv
 netsy synth facility-chains        # direct transactions + facilities -> transaction_legs.gpkg
 netsy synth network-loads --seed 1 # transaction lines + network inputs -> network_loads.csv
 netsy synth network-emissions      # network loads + COPERT inputs -> network_emissions.csv
@@ -278,7 +279,7 @@ Actors and transactions can come from any source. NetSy's general core is design
 accept explicitly calibrated scenario adapters:
 
 1. actor/facility population synthesis or observed registers;
-2. production/attraction, gravity, and IPF/Furness OD balancing;
+2. production/attraction regressions, gravity, and FRATAR OD balancing;
 3. shipment-size, vehicle, time, carrier, and facility-chain choices;
 4. freight pickup/delivery, parcel, and service-operation tour strategies;
 5. shortest-path, stochastic, and BPR assignment strategies;
@@ -292,22 +293,25 @@ tour heuristic, assignment model, emissions factors, or stochastic stream.
 
 ### Balanced OD flows
 
-`od-flows` provides the canonical doubly constrained IPF/Furness (also called FRATAR)
-stage. It is independent of agents and writes fractional resource
-flows that a case-specific shipment or transaction adapter can subsequently discretize.
-It reads:
+`od-marginals` and `od-flows` derive a commodity matrix the way MASS-GT's spatial interaction
+freight module does: productions and attractions from linear regressions on location
+attributes, then FRATAR balancing of a base matrix to them. Both are independent of agents and
+write fractional flows that a case turns into shipment totals.
 
-| file | required fields | purpose |
+| file | fields | purpose |
 |---|---|---|
-| `productions.csv` | `resource`, `location_id`, `quantity` | Origin marginal totals. |
-| `attractions.csv` | `resource`, `location_id`, `quantity` | Destination marginal totals. |
-| `od_prior.csv` | `resource`, `origin_location_id`, `destination_location_id`, `weight` | Non-negative supported OD pairs and their prior impedance/gravity/observed-flow weights. |
+| `location_attributes.csv` | `location_id`, attribute columns | The locations of the matrix and their attributes, such as jobs per sector; a location with all attributes empty keeps its prior totals. |
+| `marginal_coefficients.csv` | `resource`, `attribute`, `production`, `attraction` | The regression coefficients. |
+| `od_prior.csv` | `resource`, `origin_location_id`, `destination_location_id`, `weight` | The base matrix: supported OD pairs and their weights. |
 
-For every resource, production and attraction totals must agree. The stage preserves that
-total and balances only supported positive-weight OD pairs; it fails when a positive
-origin or destination has no feasible counterpart. This makes external gateways,
-unserved areas, and policy-forbidden pairs explicit scenario inputs rather than hidden
-residual flows.
+`od-marginals` writes `productions.csv` and `attractions.csv` (`resource`, `location_id`,
+`quantity`), which `od-flows` balances the prior to, writing `od_flows.csv`. Each FRATAR
+iteration scales every destination's column to its attraction and then every origin's row to
+its production, so the result matches the productions, and the attractions as closely as the
+prior allows. It stops when the largest scaling factor of either pass is within 0.005 of one
+(rounded to five decimals), when that measure stops changing, or after 50 iterations. Only
+supported pairs between listed locations carry flow; a marginal without support stays unmet,
+with a warning.
 
 ## Model
 

@@ -1,5 +1,6 @@
 import os
 import sys
+import warnings
 
 import pandas as pd
 
@@ -21,13 +22,17 @@ def run(force=False):
     if not may_write(output, force):
         return 1
     try:
-        flows = od_flows(
-            _read("productions.csv"),
-            _read("attractions.csv"),
-            _read("od_prior.csv"),
-        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            flows = od_flows(
+                _read("productions.csv"),
+                _read("attractions.csv"),
+                _read("od_prior.csv"),
+            )
     except ValueError as error:
         print(error, file=sys.stderr)
         return 1
+    for warning in caught:
+        print(f"warning: {warning.message}", file=sys.stderr)
     flows.to_csv(output, index=False)
     return 0
