@@ -1,4 +1,5 @@
-import { parquetMetadata, parquetReadObjects } from 'hyparquet'
+import { parquetMetadata, parquetRead } from 'hyparquet'
+import { column } from './columns'
 import initSqlJs from 'sql.js'
 import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url'
 import type { Cell, DataTable, Geometry, Position } from './types'
@@ -40,7 +41,7 @@ export function parseCsv(source: string): { columns: string[]; rows: Record<stri
   return {
     columns,
     rows: body.map((record) =>
-      Object.fromEntries(columns.map((column, index) => [column, toCell(record[index] ?? '')])),
+      Object.fromEntries(columns.map((column, index) => [column, ((/(^|_)id$/.test(column) || ['resource', 'segment', 'vehicle', 'combustion', 'time_interval', 'flow_type', 'size_class', 'window'].includes(column)) ? ((record[index] ?? '').trim() || null) : toCell(record[index] ?? ''))])),
     ),
   }
 }
@@ -97,7 +98,7 @@ function parseGeoPackageGeometry(value: Uint8Array): Geometry | null {
   return parseWkb(new DataView(value.buffer, value.byteOffset, value.byteLength), 8 + envelopeBytes)[0]
 }
 
-async function parseGeoPackage(file: File): Promise<Omit<DataTable, 'filename'>> {
+async function parseGeoPackage(file: File): Promise<{ columns: string[]; rows: Record<string, Cell>[]; geometries?: (Geometry | null)[]; srsId?: number }> {
   const SQL = await initSqlJs({ locateFile: () => wasmUrl })
   const database = new SQL.Database(new Uint8Array(await file.arrayBuffer()))
   try {
@@ -130,27 +131,38 @@ async function parseGeoPackage(file: File): Promise<Omit<DataTable, 'filename'>>
   }
 }
 
-// Parquet, as NetSy writes its large tables; 64-bit integers become numbers.
-async function parseParquet(file: File): Promise<{ columns: string[]; rows: Record<string, Cell>[] }> {
-  const buffer = await file.arrayBuffer()
-  const metadata = parquetMetadata(buffer)
-  const columns = metadata.schema.slice(1).map((element) => element.name)
-  const records = (await parquetReadObjects({ file: buffer, metadata })) as Record<string, unknown>[]
-  const rows = records.map((record) => {
-    const row: Record<string, Cell> = {}
-    for (const column of columns) {
-      const value = record[column]
-      row[column] = typeof value === 'bigint' ? Number(value) : value === undefined ? null : (value as Cell)
+// Decode directly into columns, without constructing row objects.
+async function parseParquet(file: File): Promise<Omit<DataTable, 'filename'>> {
+  const buffer = await file.arrayBuffer(), metadata = parquetMetadata(buffer)
+  const rowCount = Number(metadata.num_rows), columns = metadata.schema.slice(1).map(e => e.name)
+  const data: DataTable['data'] = {}, dictionaries = new Map<string, Map<string, number>>()
+  await parquetRead({ file: buffer, metadata, onChunk: chunk => {
+    const name = chunk.columnName
+    if (!data[name]) {
+      const sample = Array.from(chunk.columnData).find(v => v !== null && v !== undefined)
+      if (['INT32', 'INT64', 'FLOAT', 'DOUBLE'].includes(metadata.schema.find(e => e.name === name)?.type ?? '') || typeof sample === 'number' || typeof sample === 'bigint') data[name] = { kind: 'number', values: new Float64Array(rowCount).fill(NaN) }
+      else { data[name] = { kind: 'dictionary', dictionary: [], codes: new Int32Array(rowCount).fill(-1) }; dictionaries.set(name, new Map()) }
     }
-    return row
-  })
-  return { columns, rows }
+    const col = data[name]
+    for (let offset = 0; offset < chunk.columnData.length; offset++) {
+      const raw = chunk.columnData[offset], index = chunk.rowStart + offset
+      if (raw === null || raw === undefined) continue
+      if (col.kind === 'number') {
+        const value = Number(raw)
+        if (typeof raw === 'bigint' && !Number.isSafeInteger(value)) throw new Error(`${name}: integer exceeds JavaScript's safe range`)
+        col.values[index] = value
+      } else if (col.kind === 'dictionary') {
+        const value = String(raw), lookup = dictionaries.get(name)!
+        if (!lookup.has(value)) { lookup.set(value, col.dictionary.length); col.dictionary.push(value) }
+        col.codes[index] = lookup.get(value)!
+      }
+    }
+  } })
+  return { columns, rowCount, data }
 }
-
-// Reads `file` as the NetSy file `name`, whatever the file itself is called:
-// its format is the one `name` expects.
 export async function parseFile(file: File, name: string): Promise<DataTable> {
-  const table = name.endsWith('.gpkg') ? await parseGeoPackage(file)
-    : name.endsWith('.parquet') ? await parseParquet(file) : parseCsv(await file.text())
-  return { ...table, filename: name }
+  if (name.endsWith('.parquet')) return { ...await parseParquet(file), filename: name }
+  const table = name.endsWith('.gpkg') ? await parseGeoPackage(file) : parseCsv(await file.text())
+  const { rows, ...rest } = table
+  return { ...rest, rowCount: rows.length, data: Object.fromEntries(table.columns.map(name => [name, column(rows.map(row => row[name]))])), filename: name }
 }

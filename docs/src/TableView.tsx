@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { cell } from './columns'
 import { onFrame } from './scene/frames'
 import { Pan } from './scene/pan'
 import type { Cell, DataTable } from './types'
@@ -30,7 +31,12 @@ export function TableView({ table, active, onData, onRemove }: {
   // Column widths, in characters: the widest of the header and every value.
   const widths = useMemo(() => table?.columns.map((column) => {
     let widest = column.length
-    for (const row of table.rows) widest = Math.max(widest, valueString(row[column]).length)
+    const data = table.data[column]
+    // Finite IEEE-754 numbers fit in 26 characters; avoid scanning millions
+    // of numeric cells on the UI thread when a large table is opened.
+    if (data.kind === 'number') widest = Math.max(widest, 26)
+    else if (data.kind === 'dictionary') for (const value of data.dictionary) widest = Math.max(widest, value.length)
+    else for (const value of data.values) widest = Math.max(widest, valueString(value).length)
     return Math.min(widest, MAX_CHARS) + PAD_CHARS
   }) ?? [], [table])
   const template = widths.map((width) => `${width}ch`).join(' ')
@@ -42,7 +48,7 @@ export function TableView({ table, active, onData, onRemove }: {
     pan.set(0, 0)
     pan.setBounds(() => ({
       minX: 0, maxX: (body.current?.offsetWidth ?? 0) - element.clientWidth,
-      minY: 0, maxY: table.rows.length * ROW - (element.clientHeight - (head.current?.offsetHeight ?? 0)),
+      minY: 0, maxY: table.rowCount * ROW - (element.clientHeight - (head.current?.offsetHeight ?? 0)),
     }))
     const detach = pan.attach(element)
     const stop = onFrame((dt) => {
@@ -61,7 +67,7 @@ export function TableView({ table, active, onData, onRemove }: {
     }
   }, [pan, table])
 
-  const rows = table?.rows.slice(first, first + visible) ?? []
+  const rows = table ? Array.from({ length: Math.max(0, Math.min(visible, table.rowCount - first)) }, (_, offset) => first + offset) : []
   return (
     <section className="view table-view" inert={!active}>
       <header className="banner">
@@ -69,16 +75,16 @@ export function TableView({ table, active, onData, onRemove }: {
         {table && <button type="button" className="bubble glass" data-glass onClick={onRemove}>Remove</button>}
       </header>
       <div className="sheet glass" data-glass>
-        <div className="paper" ref={frame} tabIndex={0} aria-label={table ? `${table.filename}, ${table.rows.length} rows` : undefined}>
+        <div className="paper" ref={frame} tabIndex={0} aria-label={table ? `${table.filename}, ${table.rowCount} rows` : undefined}>
           {table && <>
             <div className="table-head" ref={head} style={{ gridTemplateColumns: template, width }}>
               {table.columns.map((column) => <span key={column}>{column}</span>)}
             </div>
             <div className="table-clip">
-              <div className="table-body" ref={body} style={{ height: table.rows.length * ROW, width }}>
+              <div className="table-body" ref={body} style={{ height: table.rowCount * ROW, width }}>
                 {rows.map((row, offset) => (
                   <div key={first + offset} className="table-row" style={{ top: (first + offset) * ROW, gridTemplateColumns: template }}>
-                    {table.columns.map((column) => <span key={column} className={numeric(row[column]) ? 'numeric' : ''}>{valueString(row[column])}</span>)}
+                    {table.columns.map((column) => <span key={column} className={numeric(cell(table, column, row)) ? 'numeric' : ''}>{valueString(cell(table, column, row))}</span>)}
                   </div>
                 ))}
               </div>

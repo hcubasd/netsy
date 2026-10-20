@@ -26,7 +26,7 @@ def _read(path):
         raise ValueError(f"{path}: {error}") from None
 
 
-def run(force=False):
+def run(force=False, payload_strata=False):
     output = "network_loads.parquet"
     if not may_write(output, force):
         return 1
@@ -35,11 +35,17 @@ def run(force=False):
         matrices = read_matrices("trip_matrices.omx") if os.path.exists("trip_matrices.omx") else None
         if not trips and matrices is None:
             raise ValueError("network-loads needs trips: tours.gpkg, delivery_tours.gpkg or trip_matrices.omx")
+        settings = {}
+        if os.path.exists("assignment_settings.csv"):
+            values = _read("assignment_settings.csv").set_index("setting")["value"].to_dict()
+            unknown = set(values) - {"route_samples", "seed", "jitter"}
+            if unknown: raise ValueError(f"assignment_settings.csv: unknown settings {sorted(unknown)}")
+            settings = {k: float(v) if k == "jitter" else int(v) for k, v in values.items()}
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             table = network_loads(
                 _read("network.gpkg"), read_zones("zones.gpkg"), *(_read(path) for path in TABLES), trips, matrices,
-                _read("matrix_assignment.csv") if matrices is not None else None, workers=os.cpu_count() or 1,
+                _read("matrix_assignment.csv") if matrices is not None else None, workers=int(os.environ.get("NETSY_WORKERS", min(os.cpu_count() or 1, 4))), payload_strata=payload_strata, **settings,
             )
     except ValueError as error:
         print(error, file=sys.stderr)

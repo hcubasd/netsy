@@ -19,7 +19,12 @@ self.onmessage = async ({ data }: MessageEvent<LoadRequest>) => {
     const { geometries, ...table } = await parseFile(data.file, data.name)
     const prepared = geometries ? prepare(geometries) : undefined
     const response: LoadResponse = { id: data.id, table: { ...table, prepared } }
-    self.postMessage(response, { transfer: prepared ? buffersOf(prepared) : [] })
+    const transfers = prepared ? buffersOf(prepared) : []
+    for (const column of Object.values(table.data)) {
+      if (column.kind === 'number') transfers.push(column.values.buffer as ArrayBuffer)
+      else if (column.kind === 'dictionary') transfers.push(column.codes.buffer as ArrayBuffer)
+    }
+    self.postMessage(response, { transfer: transfers })
   } catch (reason) {
     const response: LoadResponse = { id: data.id, error: reason instanceof Error ? reason.message : `${data.file.name} could not be read.` }
     self.postMessage(response)

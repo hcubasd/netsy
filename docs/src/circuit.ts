@@ -38,22 +38,24 @@ const ROWS: [number, string][][] = [
   ],
   [
     [1, 'shipments.gpkg'], [5, 'tour_settings.csv'], [6, 'end_tour_first.csv'], [7, 'end_tour_later.csv'],
-    [9, 'facility_chain_steps.csv'], [15, 'parcel_demand.csv'], [16, 'delivery_settings.csv'],
+    [9, 'facility_chain_steps.csv'], [22, 'routing_settings.csv'], [23, 'routing_probabilities.csv'], [24, 'routing_vehicles.csv'], [25, 'combustion_shares.csv'], [26, 'combustion_settings.csv'], [27, 'parcel_routing_settings.csv'], [28, 'parcel_routing_vehicles.csv'], [15, 'parcel_demand.csv'], [16, 'delivery_settings.csv'],
     [17, 'delivery_departures.csv'], [19, 'trip_attributes.csv'], [20, 'trip_rates.csv'], [21, 'trip_decay.csv'],
   ],
+  [[1, 'routed_shipments.gpkg'], [15, 'routed_parcel_demand.csv'], [16, 'delivery_vehicles.csv'], [17, 'delivery_combustion_shares.csv']],
   [
     [1, 'tours.gpkg'], [2, 'tour_shipments.csv'], [3, 'network.gpkg'], [4, 'assignment_vehicles.csv'],
     [5, 'link_speeds.csv'], [6, 'road_costs.csv'], [7, 'time_intervals.csv'], [8, 'matrix_assignment.csv'],
-    [9, 'transaction_legs.gpkg'], [15, 'delivery_tours.gpkg'], [20, 'trip_matrices.omx'],
+    [9, 'transaction_legs.gpkg'], [22, 'assignment_settings.csv'], [15, 'delivery_tours.gpkg'], [20, 'trip_matrices.omx'],
   ],
   [
     [1, 'network_loads.parquet'], [5, 'emission_factors.csv'], [6, 'copert_vehicles.csv'], [7, 'copert_v_coefficients.csv'],
-    [8, 'non_exhaust_factors.csv'],
+    [8, 'non_exhaust_factors.csv'], [9, 'emission_multipliers.csv'],
   ],
-  [[1, 'network_emissions.parquet']],
+  [[1, 'network_emissions.parquet'], [10, 'indicator_groups.csv']],
   [[0, 'location_attributes.csv'], [1, 'marginal_coefficients.csv'], [2, 'od_prior.csv']],
   [[0, 'productions.csv'], [1, 'attractions.csv']],
   [[1, 'od_flows.csv']],
+  [[5, 'indicators.csv']],
 ]
 
 export interface CircuitNode { id: string; x: number; y: number }

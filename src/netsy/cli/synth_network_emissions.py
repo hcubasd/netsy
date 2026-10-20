@@ -33,12 +33,12 @@ def run(force=False, method="factors"):
         return 1
     try:
         frames = [_read("network_loads.parquet"), _read("network.gpkg")] + [_read(path) for path in METHOD_TABLES[method]]
-        table = (emissions_by_factors if method == "factors" else emissions_by_copert)(*frames)
+        table = (emissions_by_factors if method == "factors" else emissions_by_copert)(*frames, multipliers=_read("emission_multipliers.csv") if os.path.exists("emission_multipliers.csv") else None)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 1
     # Grams to single precision: seven significant digits, half the size.
-    grams = [column for column in table.columns if column not in ("link_id", "time_interval", "vehicle", "segment")]
+    grams = [column for column in table.columns if column not in ("link_id", "time_interval", "vehicle", "segment", "combustion", "payload_bin")]
     table[grams] = table[grams].astype("float32")
     table.to_parquet(output, index=False)
     return 0

@@ -19,6 +19,7 @@ import bisect
 
 import numpy as np
 import pandas as pd
+from netsy.helpers.combustion import emission_multipliers
 
 from netsy.synth.agents import _zone_key
 
@@ -71,7 +72,7 @@ def _links(network, loads):
     return table
 
 
-def emissions_by_factors(loads, network, factors):
+def emissions_by_factors(loads, network, factors, multipliers=None):
     """Grams per load row and pollutant by MASS-GT's empty and full factors."""
     table = _links(network, loads)
     factors = factors.assign(
@@ -80,23 +81,25 @@ def emissions_by_factors(loads, network, factors):
     )
     if factors[["empty", "full"]].isna().any().any():
         raise ValueError("emission_factors.csv: 'empty' and 'full' must hold numbers in every row")
-    result = table[KEYS].copy()
+    result = table[KEYS + (["combustion"] if "combustion" in table else []) + (["payload_bin"] if "payload_bin" in table else [])].copy()
     for pollutant, group in factors.groupby("pollutant", sort=True):
         rates = table[["vehicle", "road_type"]].merge(
             group[["vehicle", "road_type", "empty", "full"]], on=["vehicle", "road_type"], how="left",
         )
         factor = rates["empty"].to_numpy() + table["utilization"].to_numpy() * (rates["full"] - rates["empty"]).to_numpy()
-        result[pollutant] = np.nan_to_num(factor) * table["length"].to_numpy() * table["trips"].to_numpy()
+        result[pollutant] = np.nan_to_num(factor) * table["length"].to_numpy() * table["trips"].to_numpy() * emission_multipliers(table, network, multipliers, pollutant, "exhaust")
     return result
 
 
-def emissions_by_copert(loads, network, copert_vehicles, coefficients, non_exhaust):
+def emissions_by_copert(loads, network, copert_vehicles, coefficients, non_exhaust, multipliers=None):
     """Grams per load row and pollutant by COPERT V: `<pollutant>` for hot
     exhaust and `<pollutant>_non_exhaust` for the flat factors.
     """
     table = _links(network, loads)
     types = dict(zip(copert_vehicles["vehicle"].map(_zone_key), copert_vehicles["vehicle_type"].map(_zone_key)))
     table["vehicle_type"] = table["vehicle"].map(types)
+    if table.vehicle_type.isna().any():
+        raise ValueError("copert_vehicles.csv: every loaded vehicle needs a COPERT mapping")
     table["gradient_bin"] = [_snap(value, GRADIENT_BINS) for value in table["grade"]]
     table["payload_bin"] = [_snap(value * 100, PAYLOAD_BINS) for value in table["utilization"].fillna(0)]
     distance = table["length"].to_numpy() * table["trips"].to_numpy()
@@ -108,7 +111,7 @@ def emissions_by_copert(loads, network, copert_vehicles, coefficients, non_exhau
     coefficients[names] = coefficients[names].apply(pd.to_numeric, errors="coerce")
     if coefficients[names].isna().any().any():
         raise ValueError("copert_v_coefficients.csv: 'alpha' to 'eta' and 'rf' must hold numbers in every row")
-    result = table[KEYS].copy()
+    result = table[KEYS + (["combustion"] if "combustion" in table else []) + (["payload_bin"] if "payload_bin" in table else [])].copy()
     keys = ["vehicle_type", "gradient_bin", "payload_bin"]
     # COPERT's speeds of validity, if given: a speed outside them counts as
     # the nearest.
@@ -116,17 +119,19 @@ def emissions_by_copert(loads, network, copert_vehicles, coefficients, non_exhau
     coefficients[bounds] = coefficients[bounds].apply(pd.to_numeric, errors="coerce")
     for pollutant, group in coefficients.groupby("pollutant", sort=True):
         rows = table[keys].merge(group[keys + names + bounds], on=keys, how="left")
+        if rows[names].isna().any().any():
+            raise ValueError(f"copert_v_coefficients.csv: incomplete coefficient coverage for {pollutant}")
         speed = table["speed"].to_numpy(float)
         if bounds:
             speed = np.clip(speed, rows.get("min_speed", pd.Series(-np.inf, index=rows.index)).fillna(-np.inf).to_numpy(),
                             rows.get("max_speed", pd.Series(np.inf, index=rows.index)).fillna(np.inf).to_numpy())
         factor = _hot_emission_factor({name: rows[name].to_numpy() for name in names}, speed)
-        result[pollutant] = np.nan_to_num(factor) * distance
+        result[pollutant] = np.nan_to_num(factor) * distance * emission_multipliers(table, network, multipliers, pollutant, "exhaust")
     flat = non_exhaust.assign(
         vehicle_type=non_exhaust["vehicle_type"].map(_zone_key),
         emission_factor=pd.to_numeric(non_exhaust["emission_factor"], errors="coerce"),
     )
     for pollutant, group in flat.groupby("pollutant", sort=True):
         factor = table["vehicle_type"].map(dict(zip(group["vehicle_type"], group["emission_factor"]))).fillna(0.0)
-        result[f"{pollutant}_non_exhaust"] = factor.to_numpy() * distance
+        result[f"{pollutant}_non_exhaust"] = factor.to_numpy() * distance * emission_multipliers(table, network, multipliers, pollutant, "non_exhaust")
     return result

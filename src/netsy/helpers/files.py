@@ -66,6 +66,10 @@ def read_facilities(path):
 
 # The tables shipments and tours read, by file name, with the check of each.
 SHIPMENT_TABLES = {
+    **{name: (lambda table: table) for name in (
+        "routing_settings.csv", "routing_probabilities.csv", "routing_vehicles.csv", "combustion_settings.csv",
+        "combustion_shares.csv", "parcel_demand.csv", "parcel_routing_settings.csv", "parcel_routing_vehicles.csv",
+    )},
     "production_rates.csv": validate.check_rates,
     "consumption_rates.csv": validate.check_rates,
     "shipment_totals.csv": validate.check_shipment_totals,

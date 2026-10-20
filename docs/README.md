@@ -70,3 +70,22 @@ region's own content.
 
 Data drawn on white (map colors and future table colors) uses nicrainha's default lightness,
 L* 73.9124, independently of the scene's.
+
+## Large tables and scenario files
+
+Parquet decodes directly to column buffers: numeric typed arrays and
+integer-coded string dictionaries. Workers transfer numeric buffers rather than
+cloning a row object for every record. Maps scan columns, and table rows are
+materialized only for the visible viewport. Speed and utilization maps display
+trip-weighted means; additive counts and grams are summed.
+
+The graph includes facility routing, parcel routing, powertrain/routing rules and
+output indicators. Optional inputs are alternatives or extensions, not a claim
+that every stage requires every displayed file. OMX remains a model input that
+the browser does not decode. Browser checks and their recorded dataset sizes
+are under `validation/results/`.
+
+Identifier columns in CSV remain text (including leading zeros). Parquet numeric
+identifiers exceeding JavaScript's exact integer range are rejected rather than
+silently rounded. Numeric table widths are bounded, so opening a large table
+does not scan millions of formatted cells on the UI thread.

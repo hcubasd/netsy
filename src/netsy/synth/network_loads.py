@@ -97,7 +97,7 @@ def _load(origins):
     )
 
 
-def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_tables, matrices, matrix_assignment, workers=1):
+def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_tables, matrices, matrix_assignment, workers=1, payload_strata=False, route_samples=1, seed=0, jitter=0.1):
     """One row per link, time interval, vehicle and segment with any trips:
     `trips`, their mean `utilization`, and the link's `speed` for the
     vehicle. `trip_tables` are `{name: table}` of trips, each with a
@@ -107,6 +107,9 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
     ValueError if the tables do not fit together, and warns of trips that
     find no path.
     """
+    if route_samples < 1 or int(route_samples) != route_samples or not 0 <= jitter < 1:
+        raise ValueError("assignment settings: route_samples must be positive whole and jitter in [0,1)")
+    rng = np.random.default_rng(seed)
     names, starts, ends = _intervals(intervals)
     period = ends[-1]
 
@@ -119,6 +122,12 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
     if np.isnan(length).any() or (length < 0).any():
         raise ValueError("network.gpkg: 'length' must hold numbers of at least 0")
     node_ids = pd.Index(pd.unique(pd.concat([network["from_node"], network["to_node"]]).map(_zone_key)))
+    if {"from_node_order", "to_node_order"} <= set(network):
+        orders = pd.DataFrame({"node": pd.concat([network.from_node, network.to_node]).map(_zone_key).to_numpy(),
+                               "order": pd.concat([network.from_node_order, network.to_node_order]).to_numpy()})
+        if orders.groupby("node")["order"].nunique().gt(1).any():
+            raise ValueError("network.gpkg: node ordering must be consistent")
+        node_ids = pd.Index(orders.drop_duplicates("node").sort_values("order", kind="stable")["node"])
     tails = node_ids.get_indexer(network["from_node"].map(_zone_key))
     heads = node_ids.get_indexer(network["to_node"].map(_zone_key))
     link_ids = network["link_id"].map(_zone_key).to_numpy()
@@ -163,13 +172,9 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
                              + (f" in interval {interval!r}" if speed_keys else ""))
         return values
 
-    fixed = {}
-    for row in road_costs.to_dict("records"):
-        speed_class = None if pd.isna(row.get("speed_class")) else _zone_key(row["speed_class"])
-        fixed.setdefault(_zone_key(row["road_type"]), []).append((speed_class, float(row["cost"])))
-
     # Trips: (routing class, origin node) -> destination node -> entries of
     # (group, trips, utilization sum).
+    has_combustion = any("combustion" in t for t in trip_tables.values()) or (matrix_assignment is not None and ("combustion" in matrix_assignment or "combustion_zone_column" in matrix_assignment))
     groups, group_index = [], {}
     work = {}
 
@@ -178,11 +183,21 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
         for vehicle, row in vehicles.iterrows()
     }
 
-    def add(vehicle, interval, segment, origin, destination, count, used):
+    canonical_policy = {}
+    road_rules = road_costs.to_dict("records")
+    policy_cache = {}
+    def routing_policy(combustion):
+        if combustion not in policy_cache:
+            applicable = [r for r in road_rules if pd.isna(r.get("combustion")) or _zone_key(r["combustion"]) == combustion]
+            signature = tuple(tuple((k, str(v)) for k, v in sorted(r.items()) if k != "combustion" and not pd.isna(v)) for r in applicable)
+            policy_cache[combustion] = canonical_policy.setdefault(signature, combustion)
+        return policy_cache[combustion]
+
+    def add(vehicle, interval, segment, origin, destination, count, used, combustion="fuel"):
         if vehicle not in classes:
             raise ValueError(f"assignment_vehicles.csv: no row for vehicle {vehicle!r}")
-        route_class = classes[vehicle] + (interval if speed_keys else None,)
-        key = (interval, vehicle, segment)
+        route_class = classes[vehicle] + (interval if speed_keys else None, routing_policy(combustion))
+        key = (interval, vehicle, segment) + ((combustion,) if has_combustion else ()) + (((100 if used/count > .75 else 50 if used/count > .25 else 0),) if payload_strata else ())
         if key not in group_index:
             group_index[key] = len(groups)
             groups.append(key)
@@ -200,13 +215,14 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
             raise ValueError(f"{name}: departures at {sorted(set(departure[~inside]))[:3]} fall in no time interval")
         segments = table["segment"].map(_zone_key) if "segment" in table.columns else pd.Series(name, index=table.index)
         used = pd.to_numeric(table["utilization"], errors="coerce").fillna(0).to_numpy(float)
-        for origin, destination, vehicle, interval, segment, utilization in zip(
+        combustions = table["combustion"].fillna("fuel").map(_zone_key) if "combustion" in table else ["fuel"] * len(table)
+        for origin, destination, vehicle, interval, segment, utilization, combustion in zip(
             table["origin_zone_id"].map(_zone_key), table["destination_zone_id"].map(_zone_key),
-            table["vehicle"].map(_zone_key), names[which], segments, used,
+            table["vehicle"].map(_zone_key), names[which], segments, used, combustions,
         ):
             if origin not in zone_node or destination not in zone_node:
                 raise ValueError(f"{name}: zones {origin!r} and {destination!r} must be in zones.gpkg")
-            add(vehicle, interval, segment, origin, destination, 1.0, utilization)
+            add(vehicle, interval, segment, origin, destination, 1.0, utilization, combustion)
 
     if matrices is not None:
         zone_ids, by_name = matrices
@@ -218,53 +234,86 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
             minimum = float(row.get("minimum") or 0.0)
             utilization = float(row.get("utilization") or 0.0)
             origins, destinations = np.nonzero(matrix >= max(minimum, 1e-12))
+            flag_column = row.get("combustion_zone_column")
+            flags = None
+            if flag_column is not None and not pd.isna(flag_column):
+                if flag_column not in zones:
+                    raise ValueError(f"matrix_assignment.csv: missing zone attribute {flag_column!r}")
+                flags = dict(zip(zones.zone_id.map(_zone_key), pd.to_numeric(zones[flag_column]) > 0))
             for o, d in zip(origins, destinations):
                 if zone_ids[o] not in zone_node or zone_ids[d] not in zone_node:
                     continue
                 count = float(matrix[o, d])
+                combustion = row.get("combustion", "fuel")
+                if pd.isna(combustion): combustion = "fuel"
+                if flags is not None and (flags[zone_ids[o]] or flags[zone_ids[d]]):
+                    combustion = row.get("flagged_combustion", "hybrid")
                 add(_zone_key(row["vehicle"]), "", _zone_key(row["segment"]), zone_ids[o], zone_ids[d],
-                    count, count * utilization)
+                    count, count * utilization, combustion)
 
     total_trips = csr_matrix((len(link_ids), max(len(groups), 1)))
     total_used = csr_matrix((len(link_ids), max(len(groups), 1)))
     unrouted = 0.0
     speed_by_class = {}
     for route_class, trips in work.items():
-        speed_class, per_hour, per_km, interval = route_class
+        speed_class, per_hour, per_km, interval, combustion = route_class
         speed = speed_of(speed_class, interval)
         speed_by_class[(speed_class, interval)] = speed
         cost = per_hour * length / speed + per_km * length
-        for road_type, rules in fixed.items():
-            for rule_class, value in rules:
-                if rule_class in (None, speed_class):
-                    cost[road_types == road_type] = value
-        graph = csr_matrix((cost[edges], (tails[edges], heads[edges])), shape=(len(node_ids),) * 2)
-        _STATE.update(graph=graph, link_of=link_of, trips=trips, link_count=len(link_ids), group_count=max(len(groups), 1))
-        origins = list(trips)
-        chunks = [origins[i::workers * 8] for i in range(workers * 8)] if workers > 1 else [origins]
-        if workers > 1:
-            with multiprocessing.get_context("fork").Pool(workers) as pool:
-                results = pool.map(_load, chunks)
-        else:
-            results = [_load(chunk) for chunk in chunks]
-        for loaded, used, missed in results:
-            total_trips = total_trips + loaded
-            total_used = total_used + used
-            unrouted += missed
+        for rule in road_costs.to_dict("records"):
+            if not pd.isna(rule.get("speed_class")) and _zone_key(rule["speed_class"]) != speed_class:
+                continue
+            if not pd.isna(rule.get("combustion")) and _zone_key(rule["combustion"]) != combustion:
+                continue
+            mask = np.ones(len(network), bool) if pd.isna(rule.get("road_type")) or rule.get("road_type") == "*" else road_types == _zone_key(rule["road_type"])
+            if not pd.isna(rule.get("attribute")):
+                attribute = rule["attribute"]
+                if attribute not in network:
+                    raise ValueError(f"road_costs.csv: network has no attribute {attribute!r}")
+                if pd.api.types.is_numeric_dtype(network[attribute]):
+                    mask &= network[attribute].to_numpy() == float(rule["value"])
+                else:
+                    mask &= network[attribute].map(_zone_key).to_numpy() == _zone_key(rule["value"])
+            if rule.get("operation") == "exclude":
+                cost[mask] = np.inf
+            elif rule.get("operation") == "add":
+                cost[mask] += float(rule["cost"])
+            else:
+                cost[mask] = float(rule["cost"])
+        for sample in range(int(route_samples)):
+            sampled_cost = cost if route_samples == 1 else cost * rng.uniform(1-jitter, 1+jitter, len(cost))
+            graph = csr_matrix((sampled_cost[edges], (tails[edges], heads[edges])), shape=(len(node_ids),) * 2)
+            _STATE.update(graph=graph, link_of=link_of, trips=trips, link_count=len(link_ids), group_count=max(len(groups), 1))
+            origins = list(trips)
+            chunks = [origins[i::workers * 8] for i in range(workers * 8)] if workers > 1 else [origins]
+            if workers > 1:
+                with multiprocessing.get_context("fork").Pool(workers) as pool:
+                    results = pool.map(_load, chunks)
+            else:
+                results = [_load(chunk) for chunk in chunks]
+            for loaded, used, missed in results:
+                total_trips = total_trips + loaded / route_samples
+                total_used = total_used + used / route_samples
+                unrouted += missed / route_samples
     _STATE.clear()
 
     total_trips = total_trips.tocoo()
     links, group_of, count = total_trips.row, total_trips.col, total_trips.data
     used = np.asarray(total_used.tocsr()[links, group_of]).ravel()
-    keys = np.array(groups, dtype=object).reshape(-1, 3) if groups else np.empty((0, 3), dtype=object)
+    keys = np.array(groups, dtype=object).reshape(-1, 3 + int(has_combustion) + int(payload_strata)) if groups else np.empty((0, 3 + int(has_combustion) + int(payload_strata)), dtype=object)
     speed = np.empty(len(links))
-    for group, (interval, vehicle, _) in enumerate(groups):
+    for group, key in enumerate(groups):
+        interval, vehicle = key[:2]
         at = group_of == group
         speed[at] = speed_by_class[(classes[vehicle][0], interval if speed_keys else None)][links[at]]
     table = pd.DataFrame({
         "link_id": link_ids[links], "time_interval": keys[group_of, 0], "vehicle": keys[group_of, 1],
         "segment": keys[group_of, 2], "trips": count, "utilization": used / count, "speed": speed,
     })
+    if has_combustion:
+        table["combustion"] = keys[group_of, 3]
+    if payload_strata:
+        table["payload_bin"] = keys[group_of, -1].astype(int)
     if unrouted:
         warnings.warn(f"{unrouted:g} trips found no path between their zones and were not loaded")
     return table.sort_values(["link_id", "time_interval", "vehicle", "segment"], kind="stable").reset_index(drop=True)

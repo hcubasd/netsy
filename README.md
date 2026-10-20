@@ -1,6 +1,6 @@
 # netsy
 
-NetSy is a general spatial resource-flow synthesizer. It turns case-specific activity,
+NetSy (Network Emissions Synthesizer) is a general spatial resource-flow synthesizer. It turns case-specific activity,
 facility, vehicle, timing, network, and emissions evidence into explicit transactions,
 capacity-constrained movements, directional link loads, and emissions.
 
@@ -62,14 +62,15 @@ netsy synth network-emissions --method copert # COPERT V instead of MASS-GT's em
 
 ## Reproducing MASS-GT
 
-With MASS-GT's Dutch inputs (the `netherlands` case, built by its `run.sh`), every stage
-reproduces MASS-GT's reference run: firm synthesis and the commodity matrix (to MASS-GT's
-rounding), shipments and tours (statistically, as random draws differ), parcel demand and van
-trips (exactly, to MASS-GT's rounding), and the assignment and its emissions (link by link, on
-MASS-GT's own trips). Where MASS-GT's code departs from its own intent, NetSy follows the
-intent and says so in the stage's section; the case data reproduce two such departures, the
-reversed reading of imports and exports and the scrambled external zones of van trips, because
-MASS-GT's reference results depend on them.
+The Dutch adapter in `cases/netherlands/` builds NetSy inputs from MASS-GT's
+own study-area data. Comparisons cover agents, SIF, shipments, freight tours,
+parcel demand/deliveries, van matrices, road assignment and emissions. Exact
+agreement is tested where appropriate; stochastic stages use independent seeds,
+and fixes are measured separately. `validation/results/` contains the actual
+errors and differences, including the rounding-exact SIF and parcel-demand match.
+The Dutch adapter explicitly retains the source's reversed import/export reading
+and external-zone van mapping for reference compatibility; these are not general
+core rules. See `validation/README.md` for the scope and known limitations.
 
 ## Model boundary
 
@@ -410,3 +411,89 @@ Network loads give every trip its cheapest path at the given speeds, all or noth
 trips and utilization per link, interval, vehicle and segment. Emissions are either MASS-GT's
 factors, interpolated between empty and full by utilization, or COPERT V's speed function at
 each load's speed, grade and payload, both times the link's length and trips.
+
+
+## Facility routing and powertrains
+
+`netsy synth facility-routing --seed 1` reads `shipments.gpkg`, zones, facilities,
+`routing_settings.csv` (`zone_column`, `facility_column`, `area_column`),
+`routing_probabilities.csv` (shipment strata and `probability`), and
+`routing_vehicles.csv` (shipment strata, `vehicle`, `share`). It writes
+`routed_shipments.gpkg`: unique transaction/leg IDs, stable `parent_transaction_id`,
+ordered `leg`, and an explicit carrier for facility-to-policy-area movements.
+Quantities may be fractional. Each leg retains the consignment quantity; summing
+all legs counts transport work, not new final demand.
+
+```sh
+netsy synth facility-routing --seed 1
+netsy synth tours --shipments routed_shipments.gpkg --seed 1
+```
+
+Tours honor explicit `carrier` assignments. Optional `combustion_shares.csv`
+contains choice keys (e.g. `carrier_type`, `zone_relation`, `segment`, `vehicle`),
+`combustion`, and `share`; empty keys are wildcards and more specific keys win.
+`zone_relation` is `all`, `some`, or `none` of the tour's actual zones flagged by
+the `zone_column` in `combustion_settings.csv`. Unspecified vehicle/segment
+fallbacks must be supplied as scenario rows, never an implicit uniform fuel draw.
+
+`netsy synth parcel-routing --seed 1` reads `parcel_demand.csv`, zones, facilities,
+skims, `parcel_routing_settings.csv` and `parcel_routing_vehicles.csv`, and writes
+`routed_parcel_demand.csv`. Settings select the flag and threshold, facility type,
+consolidation probability, and `nearest` or `minimum_detour` selection. Optional
+`operator_column` restricts hubs to their operator; `area_column` restricts them
+to the recipient's area. `pool_operators=1` consolidates outbound operations while
+preserving `demand_operator`; `inbound_vehicle` selects the feeder vehicle.
+Vehicle shares can have `maximum_distance` (km) and `fallback_vehicle` for a
+radius-limited mode. `final_delivery` distinguishes customer parcels from transfers.
+
+```sh
+netsy synth parcel-routing --seed 1
+netsy synth deliveries --demand routed_parcel_demand.csv --seed 1
+```
+
+Optional `delivery_vehicles.csv` supplies `vehicle`, `max_load` (parcels),
+`drop_time` (hours/parcel), `speed_multiplier` relative to the time skim (or absolute `speed_kmh`), and
+`utilization`. Tours are grouped by facility, operator, vehicle and leg.
+Optional `delivery_combustion_shares.csv` uses the same tour-choice contract.
+UCC and microhub adapters are in `validation/build_scenario.py`; Dutch baseline
+builders are versioned under `cases/netherlands/`. Data files stay outside Git.
+
+Assignment preserves combustion in its output strata. `road_costs.csv` can
+add a `combustion` selector, an `attribute`/`value` filter on network links, and
+`operation=add` or `exclude` (otherwise replace), allowing hybrid route policies without
+country-specific branches. Matrix assignment can use `combustion_zone_column`
+and `flagged_combustion` to classify by real endpoint flags. Optional
+`from_node_order`/`to_node_order` preserve an input model's shortest-path tie
+ordering. `assignment_settings.csv` can set `route_samples`, `seed` and `jitter`
+for MASS-GT-style perturbed-cost route averaging; the default remains one route.
+`NETSY_WORKERS` bounds worker processes (default at most four).
+
+`emission_multipliers.csv` optionally supplies `multiplier` keyed by combustion,
+vehicle, pollutant, `source` (`exhaust` or `non_exhaust`), or link attributes.
+Specific rules override wildcard rules; overlapping equal-specificity rules fail.
+Zero tailpipe factors never automatically zero tire/brake emissions.
+
+For COPERT use `netsy synth network-loads --payload-strata` first: this keeps
+separate 0/50/100 percent payload bins. Averaging payload before evaluating a
+nonlinear emission function is generally not equivalent. Speeds still come from
+the supplied link speed tables. Missing COPERT vehicle mappings or coefficient
+coverage fail explicitly. The Dutch COPERT example declares an assumed Euro VI
+truck / Euro 6 van fleet and flat grades; it is a factor-model sensitivity, not
+an observed fleet estimate or a reproduction of the advisor paper's case.
+The current Dutch non-exhaust input is empty: no non-exhaust result is claimed.
+A battery-related non-exhaust sensitivity can be supplied through explicit
+scenario multipliers; it is not inferred from an electric label.
+
+## Comparisons and presentation
+
+See `validation/README.md` for reference revisions, execution repairs, seed
+sensitivity, stage-level comparisons, documented differences and reproducible
+commands. `presentation/main.pdf` summarizes only the measured comparisons.
+
+`netsy synth indicators` writes tidy `indicators.csv`: counts, quantities,
+customer versus transfer parcels, vehicle-km, and pollutant grams, plus OD/van
+matrix totals. It replaces country-specific reporting labels with optional
+`indicator_groups.csv` rows (`table`, `column`; empty column means a total).
+Group a table by any of its attributes. `quantity_units` and `size_units` retain
+case-defined units; the Dutch adapter uses tonnes and jobs. Vehicle-km always
+uses explicit road-link lengths, rather than straight-line tour geometry.

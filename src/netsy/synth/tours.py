@@ -111,7 +111,7 @@ class _EndTour:
         return rng.random() < 1 / (1 + math.exp(-utility))
 
 
-def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_first, end_tour_later, rng):
+def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_first, end_tour_later, rng, combustion_shares=None, combustion_zone_column=None):
     """One row per trip of every tour, and one row per shipment part with
     the tour that carries it: `(trips, parts)`. `facilities` may be None
     when no shipment uses one; `skims` is `(zone_ids, time, distance)`. `rng`
@@ -133,7 +133,7 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
         raise ValueError(f"shipments.gpkg: missing columns {missing}")
     reserved = set(required) | {
         "origin_agent_id", "destination_agent_id", "flow_type", "origin_facility_id", "destination_facility_id",
-        "size_class", "window", "window_start", "window_end", "geometry",
+        "size_class", "window", "window_start", "window_end", "geometry", "carrier", "combustion", "leg", "routed", "parent_transaction_id",
     }
     strata = ["resource"] + [column for column in shipments.columns if column not in reserved]
     for name in lists["same_stratum"]:
@@ -196,6 +196,10 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
         bounds = [(math.nan, math.nan)] * len(shipments)
     stratum_rows = [dict(zip(strata, row)) for row in shipments[strata].map(_zone_key).itertuples(index=False, name=None)]
     same_key = pd.Series([tuple(row[name] for name in lists["same_stratum"]) for row in stratum_rows])
+    if "combustion" in shipments:
+        if combustion_shares is not None:
+            raise ValueError("supply shipment combustion or combustion_shares.csv, not both")
+        same_key = pd.Series([(key, fuel) for key, fuel in zip(same_key, shipments.combustion.fillna("fuel").map(_zone_key))])
     same_code = pd.factorize(same_key)[0]
 
     # Parts: shipments split into equal parts that fit their vehicle.
@@ -210,7 +214,10 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
     carrier = np.empty(len(part_of), dtype=object)
     for index, ship in enumerate(part_of):
         ends = [f for f, kind in ((origin_facility[ship], origin_kind[ship]), (destination_facility[ship], destination_kind[ship])) if f and kind in bases]
-        if ends:
+        explicit = shipments["carrier"].iloc[ship] if "carrier" in shipments else None
+        if explicit is not None and not pd.isna(explicit):
+            carrier[index] = _zone_key(explicit)
+        elif ends:
             carrier[index] = ends[0] if len(ends) == 1 else ends[int(rng.integers(2))]
         else:
             carrier[index] = f"independent_{int(rng.integers(values['independent_carriers'])) + 1}"
@@ -412,10 +419,17 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
             ))
             assignments.extend((part_of[part], tour_number, part_quantity[part]) for part in tour)
 
-    return _tables(
+    result, parts = _tables(
         trips, assignments, shipments, strata, stratum_rows, vehicle, part_quantity, part_of, skim_zone, zone_point,
         capacity_of, zones.crs,
     )
+    if combustion_shares is not None:
+        from netsy.helpers.combustion import tour_combustion
+        result = tour_combustion(result, zones, facilities, combustion_shares, combustion_zone_column, rng)
+    if "parent_transaction_id" in shipments:
+        parents = shipments.set_index("transaction_id")["parent_transaction_id"]
+        parts["parent_transaction_id"] = parts.transaction_id.map(parents)
+    return result, parts
 
 
 @njit(cache=True)
@@ -547,6 +561,9 @@ def _tables(trips, assignments, shipments, strata, stratum_rows, vehicle, part_q
             "tour_id": trip["tour_id"], "trip": trip["trip"], "carrier": trip["carrier"], "vehicle": vehicle[first],
             "resource": None if trip["empty"] else resource,
         }
+        if "combustion" in shipments:
+            fuel = shipments.combustion.iloc[first]
+            row["combustion"] = "fuel" if pd.isna(fuel) else _zone_key(fuel)
         row.update({column: stratum_rows[first][column] for column in strata if column != "resource"})
         row.update({
             "shipments": len(tour), "tour_quantity": trip["total"], "quantity": trip["load"],

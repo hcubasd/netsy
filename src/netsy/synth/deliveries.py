@@ -166,7 +166,7 @@ def _routes_savings(depot, stops, loads, max_load, distance):
     return [_improve([depot] + [int(stops[s]) for s in route] + [depot], distance) for route in routes.values()]
 
 
-def deliveries(zones, skims, demand, settings, departures, rng, routing="massgt"):
+def deliveries(zones, skims, demand, settings, departures, rng, routing="massgt", vehicles=None):
     """One row per trip of every delivery tour: `tour_id`, `trip`,
     `carrier` (the depot), `operator`, `vehicle`, `segment`, `parcels`
     delivered at its destination, `quantity` on board, `utilization`,
@@ -212,7 +212,23 @@ def deliveries(zones, skims, demand, settings, departures, rng, routing="massgt"
 
     rows, tour_number = [], 0
     max_load = values["max_load"]
-    for depot_id, group in demand.groupby(demand["facility_id"].map(_zone_key), sort=True):
+    if "delivery_group" in demand:
+        demand["delivery_group"] = demand.delivery_group.fillna(demand.facility_id)
+    group_columns = ["facility_id"] + [c for c in ("operator", "vehicle", "leg", "delivery_group") if c in demand]
+    per_vehicle = {} if vehicles is None else vehicles.set_index("vehicle").to_dict("index")
+    for _, group in demand.groupby(group_columns, sort=True):
+        depot_id = _zone_key(group["facility_id"].iloc[0])
+        active = dict(values)
+        if "vehicle" in group:
+            active["vehicle"] = group.vehicle.iloc[0]
+            if active["vehicle"] not in per_vehicle:
+                raise ValueError(f"delivery_vehicles.csv: no parameters for {active['vehicle']!r}")
+            for c, value in per_vehicle[active["vehicle"]].items():
+                if not pd.isna(value): active[c] = float(value)
+        max_load = int(active["max_load"])
+        if max_load != float(active["max_load"]) or not 0 <= float(active["utilization"]) <= 1 or float(active["drop_time"]) < 0 or float(active.get("speed_multiplier", 1)) <= 0 or float(active.get("speed_kmh", 1)) <= 0:
+            raise ValueError("delivery vehicle parameters: whole capacity, nonnegative drop time, positive speed, and utilization in [0,1] required")
+        if max_load < 1: raise ValueError("delivery vehicle capacity must be positive")
         depot = int(group["origin"].iloc[0])
         operator = group["operator"].iloc[0]
         stops = group.groupby("destination")["parcels"].sum()
@@ -242,15 +258,17 @@ def deliveries(zones, skims, demand, settings, departures, rng, routing="massgt"
             clock = hour
             for trip, (a, b) in enumerate(zip(route[:-1], route[1:])):
                 parcels = delivered.get(b, 0) if trip < len(route) - 2 else 0
-                travel = float(time[a, b])
+                travel = float(distance[a, b]) / float(active["speed_kmh"]) if "speed_kmh" in active else float(time[a, b]) / float(active.get("speed_multiplier", 1))
                 rows.append({
                     "tour_id": tour_number, "trip": trip + 1, "carrier": depot_id, "operator": operator,
-                    "vehicle": values["vehicle"], "segment": values["segment"], "parcels": parcels,
-                    "quantity": on_board, "utilization": values["utilization"], "tour_departure": hour,
+                    "vehicle": active["vehicle"], "segment": values["segment"], "parcels": parcels,
+                    "quantity": on_board, "utilization": active["utilization"], "tour_departure": hour,
                     "departure": clock, "arrival": clock + travel, "from": a, "to": b,
                 })
                 on_board -= parcels
-                clock += travel + values["drop_time"] * parcels
+                if "leg" in group:
+                    rows[-1].update(leg=group.leg.iloc[0], final_delivery=str(group.final_delivery.iloc[0]).lower() == 'true')
+                clock += travel + active["drop_time"] * parcels
     table = pd.DataFrame(rows)
     lines = [LineString([point_of[a], point_of[b]]) for a, b in zip(table["from"], table["to"])]
     table["origin_zone_id"] = table.pop("from").map(original)

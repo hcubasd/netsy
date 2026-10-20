@@ -10,6 +10,9 @@ export interface Command {
 }
 
 export const commands: Command[] = [
+  { name: 'indicators', inputs: [], optional: ['agents.gpkg', 'shipments.gpkg', 'tours.gpkg', 'delivery_tours.gpkg', 'network_loads.parquet', 'network_emissions.parquet', 'network.gpkg', 'od_flows.csv', 'trip_matrices.omx', 'indicator_groups.csv'], outputs: ['indicators.csv'] },
+  { name: 'facility-routing', inputs: ['shipments.gpkg', 'zones.gpkg', 'facilities.gpkg', 'routing_settings.csv', 'routing_probabilities.csv', 'routing_vehicles.csv'], outputs: ['routed_shipments.gpkg'] },
+  { name: 'parcel-routing', inputs: ['parcel_demand.csv', 'zones.gpkg', 'facilities.gpkg', 'skims.omx', 'parcel_routing_settings.csv', 'parcel_routing_vehicles.csv'], outputs: ['routed_parcel_demand.csv'] },
   {
     name: 'agents',
     inputs: ['zones.gpkg', 'size_totals.csv', 'size_classes.csv'],
@@ -30,7 +33,7 @@ export const commands: Command[] = [
       'shipments.gpkg', 'zones.gpkg', 'skims.omx', 'shipment_vehicles.csv', 'tour_settings.csv',
       'end_tour_first.csv', 'end_tour_later.csv',
     ],
-    optional: ['facilities.gpkg'],
+    optional: ['facilities.gpkg', 'routed_shipments.gpkg', 'combustion_shares.csv', 'combustion_settings.csv'],
     outputs: ['tours.gpkg', 'tour_shipments.csv'],
   },
   {
@@ -51,6 +54,7 @@ export const commands: Command[] = [
   {
     name: 'deliveries',
     inputs: ['parcel_demand.csv', 'zones.gpkg', 'skims.omx', 'delivery_settings.csv', 'delivery_departures.csv'],
+    optional: ['routed_parcel_demand.csv', 'delivery_vehicles.csv', 'delivery_combustion_shares.csv', 'combustion_settings.csv'],
     outputs: ['delivery_tours.gpkg'],
   },
   {
@@ -63,14 +67,14 @@ export const commands: Command[] = [
     inputs: [
       'network.gpkg', 'zones.gpkg', 'assignment_vehicles.csv', 'link_speeds.csv', 'road_costs.csv', 'time_intervals.csv',
     ],
-    optional: ['tours.gpkg', 'delivery_tours.gpkg', 'trip_matrices.omx', 'matrix_assignment.csv'],
+    optional: ['tours.gpkg', 'delivery_tours.gpkg', 'trip_matrices.omx', 'matrix_assignment.csv', 'assignment_settings.csv'],
     outputs: ['network_loads.parquet'],
   },
   {
     name: 'network-emissions',
     inputs: ['network_loads.parquet', 'network.gpkg', 'emission_factors.csv'],
     // COPERT V (--method copert) instead of MASS-GT's factors.
-    optional: ['copert_vehicles.csv', 'copert_v_coefficients.csv', 'non_exhaust_factors.csv'],
+    optional: ['copert_vehicles.csv', 'copert_v_coefficients.csv', 'non_exhaust_factors.csv', 'emission_multipliers.csv'],
     outputs: ['network_emissions.parquet'],
   },
 ]

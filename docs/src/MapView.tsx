@@ -1,3 +1,4 @@
+import { cell, unique } from './columns'
 import { useMemo, useRef, useState } from 'react'
 import { MapCanvas, type MapControls, type ZoomHistory } from './MapCanvas'
 import type { Legend } from './map/scene'
@@ -6,7 +7,7 @@ import type { Cell, DataTable } from './types'
 
 // The map: NetSy's geometries, colored by a measure, in a white square.
 
-type Layer = 'zones' | 'agents' | 'facilities' | 'shipments' | 'tours' | 'deliveries' | 'network' | 'loads' | 'emissions'
+type Layer = 'routed' | 'zones' | 'agents' | 'facilities' | 'shipments' | 'tours' | 'deliveries' | 'network' | 'loads' | 'emissions'
 
 interface LayerSpec {
   label: string
@@ -17,6 +18,7 @@ interface LayerSpec {
 }
 
 const LAYERS: Record<Layer, LayerSpec> = {
+  routed: { label: 'Routed shipments', geometry: 'routed_shipments.gpkg', key: 'transaction_id', direct: true },
   zones: { label: 'Zones', geometry: 'zones.gpkg', key: 'zone_id', direct: true },
   agents: { label: 'Agents', geometry: 'agents.gpkg', key: 'agent_id', direct: true },
   facilities: { label: 'Facilities', geometry: 'facilities.gpkg', key: 'facility_id', direct: true },
@@ -28,32 +30,35 @@ const LAYERS: Record<Layer, LayerSpec> = {
   emissions: { label: 'Network · emissions', geometry: 'network.gpkg', data: 'network_emissions.parquet', key: 'link_id' },
 }
 
-const dimensions = ['resource', 'time_interval', 'vehicle', 'segment']
+const dimensions = ['resource', 'time_interval', 'vehicle', 'segment', 'combustion', 'leg']
 const numeric = (value: Cell | undefined) => typeof value === 'number' && Number.isFinite(value)
 const label = (value: string) => value.replaceAll('_', ' ').replace(/^\w/, (letter) => letter.toUpperCase())
 const valueString = (value: Cell | undefined) => value === null || value === undefined ? '' : String(value)
 
 function valuesFor(table: DataTable, layer: LayerSpec) {
   const excluded = new Set([...dimensions, layer.key])
-  return table.columns.filter((column) => !excluded.has(column) && !/(^|_)id$/.test(column) && table.rows.some((row) => numeric(row[column])))
+  return table.columns.filter((column) => !excluded.has(column) && !/(^|_)id$/.test(column) && table.data[column]?.kind === 'number')
 }
 
 // One value per geometry row (NaN where it has none): the measure itself on
 // a file with geometry, or the matching rows of a table summed per key.
 function rowValues(geometry: DataTable, source: DataTable, layer: LayerSpec, measure: string, filters: Record<string, string>) {
-  const values = new Float64Array(geometry.rows.length).fill(Number.NaN)
+  const values = new Float64Array(geometry.rowCount).fill(Number.NaN)
   if (layer.direct) {
     if (!measure) return null
-    geometry.rows.forEach((row, index) => { if (numeric(row[measure])) values[index] = row[measure] as number })
+    for (let i = 0; i < geometry.rowCount; i++) { const value = cell(geometry, measure, i); if (numeric(value)) values[i] = value as number }
     return values
   }
-  const byKey = new Map<string, number>()
-  for (const row of source.rows) {
-    if (!dimensions.every((dimension) => (filters[dimension] ?? 'all') === 'all' || !source.columns.includes(dimension) || valueString(row[dimension]) === filters[dimension])) continue
-    const key = valueString(row[layer.key])
-    if (key && numeric(row[measure])) byKey.set(key, (byKey.get(key) ?? 0) + (row[measure] as number))
+  const sums = new Map<string, number>(), weights = new Map<string, number>()
+  const mean = measure === 'speed' || measure === 'utilization'
+  for (let i = 0; i < source.rowCount; i++) {
+    if (!dimensions.every(d => (filters[d] ?? 'all') === 'all' || !source.columns.includes(d) || valueString(cell(source, d, i)) === filters[d])) continue
+    const key = valueString(cell(source, layer.key, i)), value = cell(source, measure, i)
+    if (!key || !numeric(value)) continue
+    const weight = mean ? Number(cell(source, 'trips', i) ?? 0) : 1
+    sums.set(key, (sums.get(key) ?? 0) + Number(value) * weight); weights.set(key, (weights.get(key) ?? 0) + weight)
   }
-  geometry.rows.forEach((row, index) => { values[index] = byKey.get(valueString(row[layer.key])) ?? Number.NaN })
+  for (let i = 0; i < geometry.rowCount; i++) { const key = valueString(cell(geometry, layer.key, i)); values[i] = sums.has(key) ? sums.get(key)! / (mean ? weights.get(key)! : 1) : NaN }
   return values
 }
 
@@ -77,7 +82,7 @@ export function MapView({ tables, active, onData }: { tables: Record<string, Dat
   const prepared = geometry?.prepared ?? null
   const values = useMemo(() => (layer && geometry && source ? rowValues(geometry, source, layer, activeMeasure, filters) : null), [layer, geometry, source, activeMeasure, filters])
   const options = useMemo(() => Object.fromEntries(dimensions.filter((dimension) => source?.columns.includes(dimension))
-    .map((dimension) => [dimension, [...new Set(source!.rows.map((row) => valueString(row[dimension])).filter(Boolean))].sort()])), [source])
+    .map((dimension) => [dimension, unique(source!, dimension)])), [source])
 
   return (
     <section className="view map-view" inert={!active}>

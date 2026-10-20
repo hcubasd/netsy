@@ -4,6 +4,9 @@ import importlib
 # command -> (module providing run(force, ...), help text). Modules are imported
 # only when their command runs, so `netsy --help` stays fast.
 SYNTH_COMMANDS = {
+    "indicators": ("netsy.cli.synth_indicators", "model outputs + optional groupings -> indicators.csv"),
+    "parcel-routing": ("netsy.cli.synth_parcel_routing", "parcel demand + facility rules -> routed_parcel_demand.csv"),
+    "facility-routing": ("netsy.cli.synth_facility_routing", "shipments + zone rules -> routed_shipments.gpkg"),
     "agents": (
         "netsy.cli.synth_agents",
         "zones.gpkg + size_totals.csv + size_classes.csv -> agents.gpkg",
@@ -59,8 +62,10 @@ def build_parser():
     for name, (module, description) in SYNTH_COMMANDS.items():
         command = commands.add_parser(name, help=description, description=description)
         command.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
-        if name in {"agents", "shipments", "tours", "deliveries"}:
+        if name in {"agents", "shipments", "tours", "deliveries", "facility-routing", "parcel-routing"}:
             command.add_argument("--seed", type=int, help="seed the random draws, so the same inputs give the same output")
+        if name == "tours":
+            command.add_argument("--shipments", default="shipments.gpkg", help="shipment inputs, including routed_shipments.gpkg")
         if name == "agents":
             command.add_argument(
                 "--min-size",
@@ -70,12 +75,15 @@ def build_parser():
                 help="drop agents smaller than SIZE once drawn; their size is not given to others",
             )
         if name == "deliveries":
+            command.add_argument("--demand", default="parcel_demand.csv")
             command.add_argument(
                 "--routing",
                 choices=("massgt", "savings"),
                 default="massgt",
                 help="MASS-GT's parcel clusters and stop order, or Clarke-Wright savings routes (default: massgt)",
             )
+        if name == "network-loads":
+            command.add_argument("--payload-strata", action="store_true", help="retain separate COPERT payload bins for nonlinear emission factors")
         if name == "network-emissions":
             command.add_argument(
                 "--method",
@@ -92,6 +100,12 @@ def main(argv=None):
     options = {"force": args.force}
     if hasattr(args, "seed"):
         options["seed"] = args.seed
+    if hasattr(args, "payload_strata"):
+        options["payload_strata"] = args.payload_strata
+    if hasattr(args, "demand"):
+        options["demand"] = args.demand
+    if hasattr(args, "shipments"):
+        options["shipments"] = args.shipments
     if hasattr(args, "min_size"):
         options["min_size"] = args.min_size
     if hasattr(args, "method"):
