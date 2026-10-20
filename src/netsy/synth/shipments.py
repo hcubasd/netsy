@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 from shapely.geometry import LineString
 
+from netsy.helpers.geometry import zone_points as points_of
 from netsy.helpers.validate import SHIPMENT_TOTAL_FIELDS
 from netsy.synth.agents import _zone_key
 
@@ -232,8 +233,7 @@ def shipments(
     zone_regions = zones["region"].map(_zone_key).to_numpy()
     known_regions = set(zone_regions)
     zone_original = dict(zip(zone_keys, zones["zone_id"]))
-    zone_points = zones.geometry.representative_point()
-    zone_points = np.array(list(zip(zone_points.x, zone_points.y)))
+    zone_points = points_of(zones)
     zone_columns = {}
 
     def zone_column(column, name):

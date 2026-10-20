@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 import pyproj
 
 
@@ -23,3 +25,16 @@ def kilometers(table, path, projected_crs=None):
     result = metric.copy()
     result["geometry"] = metric.geometry.affine_transform([factor, 0, 0, factor, 0, 0])
     return result.set_crs(_KILOMETER_CRS, allow_override=True)
+
+
+def zone_points(zones):
+    """Each zone's point as an (n, 2) array: its `x` and `y` columns if it
+    has them, otherwise a point inside its polygon.
+    """
+    if {"x", "y"} <= set(zones.columns):
+        x, y = pd.to_numeric(zones["x"], errors="coerce"), pd.to_numeric(zones["y"], errors="coerce")
+        if x.isna().any() or y.isna().any():
+            raise ValueError("zones.gpkg: 'x' and 'y' must hold numbers in every row")
+        return np.column_stack([x, y])
+    points = zones.geometry.representative_point()
+    return np.column_stack([points.x, points.y])

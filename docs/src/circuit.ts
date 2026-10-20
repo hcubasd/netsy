@@ -1,10 +1,11 @@
 import { commands } from './files'
 
 // The data-flow graph as a top-down circuit, laid out by hand. Down the
-// spine (column 1) runs the chain of made files, agents to network
-// emissions; each command's fresh inputs sit in the row of the file before
-// it, to its right, and the first row's inputs are centered above agents.
-// A command's output sits in the row below its inputs.
+// spine (column 1) runs the freight chain, agents to tours, then network
+// loads and emissions; the parcel chain runs down column 15 and van trips
+// from column 19. Each command's fresh inputs sit in the row of the file
+// before it, to its right, and the first row's inputs are centered above
+// agents. A command's output sits in the row below its inputs.
 //
 // Wires run only through empty space, so none crosses a bubble. A file's
 // outputs leave its bottom edge just right of its middle and its inputs
@@ -32,14 +33,23 @@ const ROWS: [number, string][][] = [
     [5, 'production_rates.csv'], [6, 'consumption_rates.csv'], [7, 'shipment_totals.csv'], [8, 'flow_types.csv'],
     [9, 'distance_decay.csv'], [10, 'shipment_sizes.csv'], [11, 'vehicle_choice.csv'],
     [12, 'delivery_windows.csv'], [13, 'delivery_choice.csv'],
+    [15, 'parcel_attributes.csv'], [16, 'parcel_rates.csv'], [17, 'population.csv'], [18, 'order_levels.csv'],
+    [19, 'order_utility.csv'], [20, 'operator_shares.csv'], [21, 'parcel_settings.csv'],
   ],
-  [[1, 'shipments.gpkg'], [5, 'tour_settings.csv'], [6, 'end_tour_first.csv'], [7, 'end_tour_later.csv'], [9, 'facility_chain_steps.csv']],
   [
-    [0, 'tour_shipments.csv'], [1, 'tours.gpkg'], [3, 'departures.csv'], [4, 'time_intervals.csv'], [5, 'dwell_times.csv'],
-    [6, 'vehicle_velocities.csv'], [7, 'vehicle_capacities.csv'], [8, 'road_capacities.csv'], [9, 'transaction_legs.gpkg'],
-    [10, 'alternative_specific_constants.csv'], [11, 'network.gpkg'], [12, 'vehicles.csv'],
+    [1, 'shipments.gpkg'], [5, 'tour_settings.csv'], [6, 'end_tour_first.csv'], [7, 'end_tour_later.csv'],
+    [9, 'facility_chain_steps.csv'], [15, 'parcel_demand.csv'], [16, 'delivery_settings.csv'],
+    [17, 'delivery_departures.csv'], [19, 'trip_attributes.csv'], [20, 'trip_rates.csv'], [21, 'trip_decay.csv'],
   ],
-  [[1, 'network_loads.csv'], [2, 'copert_v_coefficients.csv'], [3, 'emission_factors.csv']],
+  [
+    [1, 'tours.gpkg'], [2, 'tour_shipments.csv'], [3, 'network.gpkg'], [4, 'assignment_vehicles.csv'],
+    [5, 'link_speeds.csv'], [6, 'road_costs.csv'], [7, 'time_intervals.csv'], [8, 'matrix_assignment.csv'],
+    [9, 'transaction_legs.gpkg'], [15, 'delivery_tours.gpkg'], [20, 'trip_matrices.omx'],
+  ],
+  [
+    [1, 'network_loads.csv'], [5, 'emission_factors.csv'], [6, 'copert_vehicles.csv'], [7, 'copert_v_coefficients.csv'],
+    [8, 'non_exhaust_factors.csv'],
+  ],
   [[1, 'network_emissions.csv']],
   [[0, 'location_attributes.csv'], [1, 'marginal_coefficients.csv'], [2, 'od_prior.csv']],
   [[0, 'productions.csv'], [1, 'attractions.csv']],

@@ -7,6 +7,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from netsy.helpers.fratar import fratar
+
 
 _MARGINAL_COLUMNS = {"resource", "location_id", "quantity"}
 _PRIOR_COLUMNS = {"resource", "origin_location_id", "destination_location_id", "weight"}
@@ -98,20 +100,7 @@ def od_flows(productions, attractions, prior, *, tolerance=0.005, max_iterations
         flows = weight_matrix.copy()
         production_values = production.to_numpy()
         attraction_values = attraction.to_numpy()
-        previous = None
-        for _ in range(max_iterations):
-            factors = []
-            for axis, targets in ((0, attraction_values), (1, production_values)):
-                totals = flows.sum(axis=axis)
-                scale = np.divide(targets, totals, out=np.ones_like(totals), where=totals > 0)
-                flows *= scale[None, :] if axis == 0 else scale[:, None]
-                # The pass's largest factor, as MASS-GT measures convergence.
-                used = scale[totals > 0]
-                factors.append(used[np.argmax(np.abs(used))] if len(used) else 0.0)
-            convergence = round(max(abs(factors[0] - 1), abs(factors[1] - 1)), 5)
-            if convergence <= tolerance or convergence == previous:
-                break
-            previous = convergence
+        flows, _ = fratar(flows, production_values, attraction_values, tolerance, max_iterations, decimals=5, stop_on_stall=True)
         for origin_index, origin in enumerate(origins):
             for destination_index, destination in enumerate(destinations):
                 quantity = flows[origin_index, destination_index]

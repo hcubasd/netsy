@@ -50,12 +50,37 @@ def write_skims(path, zone_ids, time, distance):
     """Write `time` and `distance` matrices with their `zone_ids` to `path`
     as OMX.
     """
+    write_matrices(path, zone_ids, dict(zip(MATRICES, (time, distance))))
+
+
+def write_matrices(path, zone_ids, matrices):
+    """Write named zone-by-zone `matrices` with their `zone_ids` to `path`
+    as OMX.
+    """
     zone_ids = np.asarray(zone_ids)
     if zone_ids.dtype.kind in "OU":
         zone_ids = zone_ids.astype("S")
     with h5py.File(path, "w") as file:
         file.attrs["OMX_VERSION"] = np.bytes_("0.2")
         file.attrs["SHAPE"] = np.array([len(zone_ids)] * 2, dtype=np.int32)
-        for name, matrix in zip(MATRICES, (time, distance)):
+        for name, matrix in matrices.items():
             file.create_dataset(f"matrices/{name}", data=np.asarray(matrix, dtype=np.float32), compression="gzip")
         file.create_dataset("lookup/zone_id", data=zone_ids)
+
+
+def read_matrices(path):
+    """The zone ids (as text) and every matrix of the OMX file at `path`, by
+    name.
+    """
+    if not os.path.exists(path):
+        raise ValueError(f"{path}: not found")
+    try:
+        with h5py.File(path, "r") as file:
+            zone_ids = _zone_ids(file["lookup"]["zone_id"][()])
+            matrices = {name: np.asarray(file["matrices"][name][()], dtype=np.float32) for name in file.get("matrices", {})}
+    except (OSError, KeyError) as error:
+        raise ValueError(f"{path}: {error}") from None
+    for name, matrix in matrices.items():
+        if matrix.shape != (len(zone_ids), len(zone_ids)):
+            raise ValueError(f"{path}: '{name}' must be a square matrix, one row and column per zone")
+    return zone_ids, matrices

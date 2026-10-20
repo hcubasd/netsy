@@ -37,25 +37,39 @@ on the local network. Its production output is static and is built with `npm run
 Run each command in the directory holding its input files.
 
 ```
-netsy synth agents --seed 1       # zones + size totals + size classes -> agents.gpkg
-netsy synth shipments --seed 1    # agents + zones + skims + shipment tables -> shipments.gpkg
-netsy synth tours --seed 1        # shipments + zones + skims + tour tables -> tours.gpkg, tour_shipments.csv
-netsy synth od-marginals           # location attributes + coefficients + OD prior -> productions, attractions
-netsy synth od-flows               # productions + attractions + OD prior -> od_flows.csv
-netsy synth facility-chains        # direct transactions + facilities -> transaction_legs.gpkg
-netsy synth network-loads --seed 1 # transaction lines + network inputs -> network_loads.csv
-netsy synth network-emissions      # network loads + COPERT inputs -> network_emissions.csv
+netsy synth od-marginals             # location attributes + coefficients + OD prior -> productions, attractions
+netsy synth od-flows                 # productions + attractions + OD prior -> od_flows.csv
+netsy synth agents --seed 1          # zones + size totals + size classes -> agents.gpkg
+netsy synth shipments --seed 1       # agents + zones + skims + shipment tables -> shipments.gpkg
+netsy synth tours --seed 1           # shipments + zones + skims + tour tables -> tours.gpkg, tour_shipments.csv
+netsy synth parcel-demand            # zones + depots + skims + parcel tables -> parcel_demand.csv
+netsy synth deliveries --seed 1      # parcel demand + zones + skims -> delivery_tours.gpkg
+netsy synth trip-matrices            # zones + skims + trip tables -> trip_matrices.omx
+netsy synth network-loads            # tours, delivery tours, trip matrices + network -> network_loads.csv
+netsy synth network-emissions        # network loads + network + emission factors -> network_emissions.csv
+netsy synth facility-chains          # shipments + facilities + chain steps -> transaction_legs.gpkg
 ```
 
 An existing output file is only replaced with `--force`.
-`agents`, `shipments`, `tours`, and `network-loads` make random draws; pass `--seed` to reproduce them.
+`agents`, `shipments`, `tours`, and `deliveries` make random draws; pass `--seed` to reproduce them.
 
-`network-loads` reads `shipments.gpkg` by default. Pass
-`--transactions transaction_legs.gpkg` to route facility-mediated transaction legs instead:
+Two options switch from MASS-GT's method to a contribution of NetSy's:
 
 ```sh
-netsy synth network-loads --transactions transaction_legs.gpkg --seed 1
+netsy synth deliveries --routing savings      # Clarke-Wright savings routes instead of MASS-GT's
+netsy synth network-emissions --method copert # COPERT V instead of MASS-GT's emission factors
 ```
+
+## Reproducing MASS-GT
+
+With MASS-GT's Dutch inputs (the `netherlands` case, built by its `run.sh`), every stage
+reproduces MASS-GT's reference run: firm synthesis and the commodity matrix (to MASS-GT's
+rounding), shipments and tours (statistically, as random draws differ), parcel demand and van
+trips (exactly, to MASS-GT's rounding), and the assignment and its emissions (link by link, on
+MASS-GT's own trips). Where MASS-GT's code departs from its own intent, NetSy follows the
+intent and says so in the stage's section; the case data reproduce two such departures, the
+reversed reading of imports and exports and the scrambled external zones of van trips, because
+MASS-GT's reference results depend on them.
 
 ## Model boundary
 
@@ -161,8 +175,8 @@ an end), and `vehicle:<vehicle>`.
 `flow_type`, the facility and zone of each end, `size_class`, `vehicle`, `window`,
 `window_start` and `window_end`, and a line from its origin to its destination.
 
-`facility-chains` and `network-loads` still count quantities in whole units, so shipments of
-fractional quantities, such as tonnes, do not pass them yet.
+`facility-chains` still counts quantities in whole units, so shipments of fractional
+quantities, such as tonnes, do not pass it yet.
 
 ### Tours
 
@@ -216,62 +230,86 @@ the same way. Multiple ordered facilities produce multiple legs. Facility-choice
 carrier-choice, parcel-scheduling, and service-demand models can create these transaction
 and chain inputs without changing the core chain semantics.
 
-`network-loads` combines ten supplied files. It does not synthesize their contents:
+### Parcels
 
-| file | purpose |
-|---|---|
-| `network.gpkg` | Directed road links: `link_id`, `grade`, `road_type`, `oneway`, and line geometry. |
-| transaction-line GeoPackage | Direct transactions (`shipments.gpkg`) or explicit facility legs (`--transactions transaction_legs.gpkg`). |
-| `departures.csv` | `resource`, `time_interval`, and departure probability. |
-| `time_intervals.csv` | Ordered `time_interval` values and their `duration`. |
-| `dwell_times.csv` | Per-resource `dwell_time` at every customer stop. |
-| `vehicles.csv` | Vehicle behaviour: BPR parameters, time/distance coefficients, and PCU. |
-| `vehicle_velocities.csv` | Vehicle speed and road accessibility by road type. |
-| `vehicle_capacities.csv` | Capacity of each vehicle for each resource. |
-| `road_capacities.csv` | Road capacity by road type. |
-| `alternative_specific_constants.csv` | Vehicle/resource alternative-specific constants. |
+`parcel-demand` derives parcels per zone the way MASS-GT's parcel demand module does, and
+`deliveries` forms delivery tours from depots the way its parcel scheduling does.
 
-`network.gpkg` and the transactions must share a CRS. NetSy transiently normalizes
-their geometry to kilometres; vehicle velocities are kilometres per interval-time unit and
-COPERT V requires interval durations in hours. There is no
-`consolidation_radii.csv`: capacity-constrained routing replaces radius consolidation.
-`dwell_times.csv` no longer has `load_pct`; vehicles return empty after their final stop.
+| file | fields | purpose |
+|---|---|---|
+| `parcel_attributes.csv`, `parcel_rates.csv` | `zone_id` and attributes; `attribute`, `rate` | Business parcels per zone, linear in attributes such as jobs. |
+| `population.csv` | `zone_id`, any strata, `persons` | Persons per zone and cell, such as age and income group. |
+| `order_levels.csv` | `level`, `quantity`, `threshold` (empty for the last) | The ordered logit's levels of parcels per period. |
+| `order_utility.csv` | any population strata (empty for any), `value` | Its additive utility terms. |
+| `operator_shares.csv` | `operator`, `share` | Parcel operators' market shares. |
+| `parcel_settings.csv` | `setting`, `value` | `period` (days), `per_person` (a daily total to scale consumer parcels to), `depot_type`, `operator_column`. |
+| `delivery_settings.csv` | `setting`, `value` | `max_load` (parcels per vehicle), `drop_time` (h per parcel), `vehicle`, `segment`, `utilization`. |
+| `delivery_departures.csv` | `hour`, `cumulative_share` | When tours depart. |
 
-`network_loads.csv` has a row per directional link, interval,
-resource, vehicle, and payload fraction:
+`parcel_demand.csv` has a row per destination zone, operator and depot with its `parcels`;
+`delivery_tours.gpkg` has a trip per row, in the shape of `tours.gpkg`, with the parcels
+delivered at its destination.
 
-| link_id | time_interval | resource | vehicle | forward | vehicle_count | velocity | load_pct |
-|---|---|---|---|---|---:|---:|---:|
-| 17 | morning | parcels | van | true | 3 | 34.2 | 1.0 |
-| 17 | morning | parcels | van | false | 3 | 29.8 | 0.0 |
+A consumer cell's utility is the sum of its matching terms; the probability of ordering at
+most a level is 1 / (1 + exp(utility − threshold)), and its expected parcels per period, times
+its persons over the period, are scaled to `per_person` parcels a day. Each zone's parcels are
+split by operator, rounded, and sent from the operator's nearest depot. With MASS-GT's routing a
+depot sends full vehicles first, then clusters its other parcels around the farthest left,
+orders each cluster nearest first and swaps pairs of stops. MASS-GT's code orders stops by the
+distances of the next zones in its list, an indexing error that makes its tours 27% longer than
+its clusters need; NetSy uses the right zones.
 
-For each resource, its total transaction quantity is apportioned exactly across the
-defined time intervals. Within an interval, providers and seed consumers are drawn by
-remaining transaction quantity. For every feasible vehicle type, NetSy builds a
-capacity-constrained, provider-returning tour by cheapest insertion on the directed road
-network, then chooses a vehicle-tour alternative with multinomial logit. A tour serves one
-resource, may split a delivery across tours, waits at every customer, and returns empty.
-Payload fractions remain separate output strata so downstream emissions retain their
-per-leg payload information.
+**Contribution:** `--routing savings` builds each depot's tours with the Clarke-Wright savings
+algorithm under the same load, then moves single stops while that shortens a tour. With
+MASS-GT's Dutch parcels it delivers the same 228,707 parcels with 10% fewer vehicle-kilometres
+than MASS-GT's routing, using 4% more tours.
 
-`network-emissions` combines `network_loads.csv`, `network.gpkg`, `vehicles.csv`,
-`copert_v_coefficients.csv`, and `emission_factors.csv` into `network_emissions.csv`.
-The coefficient file has one row per COPERT V
-`vehicle_type`, `pollutant`, `gradient_bin`, and `payload_bin`, with columns `alpha`
-through `eta` and reduction factor `rf`. Gradient bins are `-6, -4, -2, 0, 2, 4, 6`;
-payload bins are `0, 50, 100`. The flat non-exhaust factor file has
-`vehicle_type`, `pollutant`, and `emission_factor` in g/km.
+### Van trips
 
-| link_id | time_interval | resource | vehicle | forward | pollutant | source | grams |
-|---|---|---|---|---|---|---|---:|
-| 17 | morning | parcels | van | true | nox | exhaust | 12.84 |
-| 17 | morning | parcels | van | true | pm10 | non-exhaust | 0.67 |
+`trip-matrices` derives van trips between zones the way MASS-GT's service module does: per
+segment, productions (and as many attractions) linear in zone attributes, a gravity prior
+1 / (1 + e^alpha cost^beta) times both zones' productions, and FRATAR balancing (25 iterations,
+0.005 tolerance). Trips between two zones flagged `external` in `zones.gpkg` are dropped. It
+reads `trip_attributes.csv` (`zone_id` and attributes), `trip_rates.csv` (`segment`,
+`attribute`, `rate`) and `trip_decay.csv` (`segment`, `alpha`, `beta`, `cost_per_hour`,
+`cost_per_km`), and writes `trip_matrices.omx`, a matrix per segment.
 
-Exhaust follows the COPERT V speed function. It uses each load row's velocity, payload
-fraction, and directed link grade, snapping grade and payload to the published coefficient
-grid before scaling the resulting g/km factor by link distance and vehicle count.
-Non-exhaust emissions remain velocity-independent g/km factors scaled by the same
-distance and count; no unsupported speed relationship is invented.
+### Network loads
+
+`network-loads` loads trips onto the road network the way MASS-GT's traffic assignment does:
+every trip takes the cheapest path between its zones' nodes, all or nothing, at the speeds it is
+given. It does not change speeds: where a case has the whole traffic of its roads, a separate
+step may derive speeds from it.
+
+| file | fields | purpose |
+|---|---|---|
+| `network.gpkg` | `link_id`, `from_node`, `to_node`, `length` (km), `road_type`, line geometry, optional `grade` (%) | Directed links. |
+| `zones.gpkg` | `node` | The node each zone loads at. |
+| `assignment_vehicles.csv` | `vehicle`, `speed_class`, `cost_per_hour`, `cost_per_km` | How each vehicle chooses its path. |
+| `link_speeds.csv` | `link_id`, `speed_class`, `speed` (km/h), optional `time_interval` | The given speeds. |
+| `road_costs.csv` | `road_type`, `speed_class` (empty for all), `cost` | Fixed link costs, such as for connectors or links closed to trucks. |
+| `time_intervals.csv` | `time_interval`, `start`, `end` (h) | The intervals of the period. |
+| `tours.gpkg`, `delivery_tours.gpkg` (each optional) | `departure`, `vehicle`, `utilization`, zones, optional `segment` | Trips, in the interval of their departure. |
+| `trip_matrices.omx`, `matrix_assignment.csv` (optional) | `matrix`, `vehicle`, `segment`, `utilization`, `minimum` | Matrix trips, over the whole period. |
+
+`network_loads.csv` has a row per link, interval, vehicle and segment: `trips`, their mean
+`utilization`, and the link's `speed` for the vehicle.
+
+### Network emissions
+
+`network-emissions` computes grams per load row and pollutant, a column per pollutant.
+
+- `--method factors` (MASS-GT's) reads `emission_factors.csv` (`vehicle`, `road_type`,
+  `pollutant`, `empty`, `full` in g/km); a load's factor lies between empty and full by its
+  utilization. MASS-GT overwrites rather than adds parcel vans' emissions on urban links, which
+  undercounts them; NetSy adds them.
+- `--method copert` (a contribution) reads `copert_vehicles.csv` (`vehicle`, `vehicle_type`),
+  `copert_v_coefficients.csv` (`vehicle_type`, `pollutant`, `gradient_bin`, `payload_bin`,
+  `alpha` to `eta`, `rf` as a fraction, optional `min_speed` and `max_speed`) and
+  `non_exhaust_factors.csv` (`vehicle_type`, `pollutant`, `emission_factor` in g/km). Hot
+  exhaust follows COPERT V's speed function at each load's speed, its link's grade and its
+  payload, snapped to COPERT's bins; a speed outside a row's range counts as the nearest bound.
+  Non-exhaust emissions are flat factors, reported as `<pollutant>_non_exhaust`.
 
 ## Canonical extension path
 
@@ -368,15 +406,7 @@ MASS-GT's transshipment indicator leaves out an end at a distribution centre in 
 and it drops the DC-loading indicator of a shipment unloaded in a terminal zone; parcel
 shipments of nominal flow types 3, 5 and 7 count as loaded at a distribution centre there.
 
-Network loads apportion each resource's transaction total exactly across departure
-intervals. Within an interval, NetSy draws a provider and seed consumer from residual
-flow, builds a capacity-constrained provider-returning tour for every feasible vehicle type
-by cheapest insertion, and selects a vehicle-tour alternative with multinomial logit.
-Vehicle movement uses directed road links and a BPR volume-delay function; vehicles dwell at
-each customer and return empty. Load rows retain payload fractions rather than averaging
-away the changing payload of a multi-stop tour.
-
-Network emissions use each load row's vehicle type, velocity, directed grade, and payload
-to evaluate the corresponding COPERT V hot-exhaust factor. Non-exhaust emissions are
-separate, velocity-independent g/km factors. Both sources scale their factor by directional
-link distance and vehicle count.
+Network loads give every trip its cheapest path at the given speeds, all or nothing, and sum
+trips and utilization per link, interval, vehicle and segment. Emissions are either MASS-GT's
+factors, interpolated between empty and full by utilization, or COPERT V's speed function at
+each load's speed, grade and payload, both times the link's length and trips.

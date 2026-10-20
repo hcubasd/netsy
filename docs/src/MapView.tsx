@@ -6,7 +6,7 @@ import type { Cell, DataTable } from './types'
 
 // The map: NetSy's geometries, colored by a measure, in a white square.
 
-type Layer = 'zones' | 'agents' | 'facilities' | 'shipments' | 'tours' | 'grade' | 'loads' | 'emissions'
+type Layer = 'zones' | 'agents' | 'facilities' | 'shipments' | 'tours' | 'deliveries' | 'network' | 'loads' | 'emissions'
 
 interface LayerSpec {
   label: string
@@ -22,18 +22,19 @@ const LAYERS: Record<Layer, LayerSpec> = {
   facilities: { label: 'Facilities', geometry: 'facilities.gpkg', key: 'facility_id', direct: true },
   shipments: { label: 'Shipments', geometry: 'shipments.gpkg', key: 'transaction_id', direct: true },
   tours: { label: 'Tours', geometry: 'tours.gpkg', key: 'tour_id', direct: true },
-  grade: { label: 'Network · grade', geometry: 'network.gpkg', key: 'link_id', direct: true },
+  deliveries: { label: 'Delivery tours', geometry: 'delivery_tours.gpkg', key: 'tour_id', direct: true },
+  network: { label: 'Network', geometry: 'network.gpkg', key: 'link_id', direct: true },
   loads: { label: 'Network · loads', geometry: 'network.gpkg', data: 'network_loads.csv', key: 'link_id' },
   emissions: { label: 'Network · emissions', geometry: 'network.gpkg', data: 'network_emissions.csv', key: 'link_id' },
 }
 
-const dimensions = ['resource', 'time_interval', 'vehicle', 'pollutant', 'source']
+const dimensions = ['resource', 'time_interval', 'vehicle', 'segment']
 const numeric = (value: Cell | undefined) => typeof value === 'number' && Number.isFinite(value)
 const label = (value: string) => value.replaceAll('_', ' ').replace(/^\w/, (letter) => letter.toUpperCase())
 const valueString = (value: Cell | undefined) => value === null || value === undefined ? '' : String(value)
 
 function valuesFor(table: DataTable, layer: LayerSpec) {
-  const excluded = new Set([...dimensions, 'forward', layer.key])
+  const excluded = new Set([...dimensions, layer.key])
   return table.columns.filter((column) => !excluded.has(column) && !/(^|_)id$/.test(column) && table.rows.some((row) => numeric(row[column])))
 }
 

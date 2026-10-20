@@ -16,6 +16,18 @@ SYNTH_COMMANDS = {
         "netsy.cli.synth_tours",
         "shipments.gpkg + zones.gpkg + skims.omx + tour CSVs -> tours.gpkg + tour_shipments.csv",
     ),
+    "parcel-demand": (
+        "netsy.cli.synth_parcel_demand",
+        "zones.gpkg + facilities.gpkg + skims.omx + parcel CSVs -> parcel_demand.csv",
+    ),
+    "deliveries": (
+        "netsy.cli.synth_deliveries",
+        "parcel_demand.csv + zones.gpkg + skims.omx + delivery CSVs -> delivery_tours.gpkg",
+    ),
+    "trip-matrices": (
+        "netsy.cli.synth_trip_matrices",
+        "zones.gpkg + skims.omx + trip CSVs -> trip_matrices.omx",
+    ),
     "facility-chains": (
         "netsy.cli.synth_facility_chains",
         "shipments.gpkg + facilities.gpkg + facility_chain_steps.csv -> transaction_legs.gpkg",
@@ -30,11 +42,11 @@ SYNTH_COMMANDS = {
     ),
     "network-loads": (
         "netsy.cli.synth_network_loads",
-        "network.gpkg + transaction lines + supporting CSVs -> network_loads.csv",
+        "network.gpkg + zones.gpkg + trips + assignment CSVs -> network_loads.csv",
     ),
     "network-emissions": (
         "netsy.cli.synth_network_emissions",
-        "network_loads.csv + COPERT V inputs -> network_emissions.csv",
+        "network_loads.csv + network.gpkg + emission factors or COPERT V inputs -> network_emissions.csv",
     ),
 }
 
@@ -47,7 +59,7 @@ def build_parser():
     for name, (module, description) in SYNTH_COMMANDS.items():
         command = commands.add_parser(name, help=description, description=description)
         command.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
-        if name in {"agents", "shipments", "tours", "network-loads"}:
+        if name in {"agents", "shipments", "tours", "deliveries"}:
             command.add_argument("--seed", type=int, help="seed the random draws, so the same inputs give the same output")
         if name == "agents":
             command.add_argument(
@@ -57,11 +69,19 @@ def build_parser():
                 metavar="SIZE",
                 help="drop agents smaller than SIZE once drawn; their size is not given to others",
             )
-        if name == "network-loads":
+        if name == "deliveries":
             command.add_argument(
-                "--transactions",
-                metavar="PATH",
-                help="transaction-line GeoPackage; defaults to shipments.gpkg",
+                "--routing",
+                choices=("massgt", "savings"),
+                default="massgt",
+                help="MASS-GT's parcel clusters and stop order, or Clarke-Wright savings routes (default: massgt)",
+            )
+        if name == "network-emissions":
+            command.add_argument(
+                "--method",
+                choices=("factors", "copert"),
+                default="factors",
+                help="MASS-GT's empty and full emission factors, or COPERT V (default: factors)",
             )
         command.set_defaults(module=module)
     return parser
@@ -74,6 +94,8 @@ def main(argv=None):
         options["seed"] = args.seed
     if hasattr(args, "min_size"):
         options["min_size"] = args.min_size
-    if hasattr(args, "transactions"):
-        options["transactions"] = args.transactions
+    if hasattr(args, "method"):
+        options["method"] = args.method
+    if hasattr(args, "routing"):
+        options["routing"] = args.routing
     return importlib.import_module(args.module).run(**options)

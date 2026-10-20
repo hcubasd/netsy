@@ -79,7 +79,7 @@ def test_trip_columns_and_closed_tours():
     trips, parts = _synth([(1, 2, 1.0, "van", "a", *DAY, None), (1, 3, 1.0, "van", "a", *DAY, None)])
     assert list(trips.columns) == [
         "tour_id", "trip", "carrier", "vehicle", "resource", "segment", "shipments", "tour_quantity", "quantity",
-        "tour_departure", "departure", "arrival", "origin_zone_id", "destination_zone_id", "geometry",
+        "utilization", "tour_departure", "departure", "arrival", "origin_zone_id", "destination_zone_id", "geometry",
     ]
     for _, tour in trips.groupby("tour_id"):
         assert tour["trip"].tolist() == list(range(1, len(tour) + 1))

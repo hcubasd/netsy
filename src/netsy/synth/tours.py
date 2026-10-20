@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 from shapely.geometry import LineString
 
+from netsy.helpers.geometry import zone_points
 from netsy.synth.agents import _zone_key
 from netsy.synth.shipments import AGENT, ZONE, _intrazonal, _rows_for, _label
 
@@ -123,8 +124,7 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
     zone_keys = zones["zone_id"].map(_zone_key)
     zone_original = dict(zip(zone_keys, zones["zone_id"]))
     skim_zone = {index: zone_original[zone] for zone, index in skim_index.items() if zone in zone_original}
-    points = zones.geometry.representative_point()
-    zone_point = {skim_index[key]: (point.x, point.y) for key, point in zip(zone_keys, points) if key in skim_index}
+    zone_point = {skim_index[key]: tuple(point) for key, point in zip(zone_keys, zone_points(zones)) if key in skim_index}
 
     required = ["transaction_id", "resource", "quantity", "vehicle", "origin_zone_id", "destination_zone_id"]
     missing = [column for column in required if column not in shipments.columns]
@@ -404,7 +404,10 @@ def tours(zones, facilities, skims, shipments, vehicles, settings, end_tour_firs
             ))
             assignments.extend((part_of[part], tour_number, part_quantity[part]) for part in tour)
 
-    return _tables(trips, assignments, shipments, strata, stratum_rows, vehicle, part_quantity, part_of, skim_zone, zone_point, zones.crs)
+    return _tables(
+        trips, assignments, shipments, strata, stratum_rows, vehicle, part_quantity, part_of, skim_zone, zone_point,
+        capacity_of, zones.crs,
+    )
 
 
 def _trips(tour_id, carrier, tour, order, part_of, part_quantity, origin, destination, window, bounds,
@@ -464,7 +467,8 @@ def _trips(tour_id, carrier, tour, order, part_of, part_quantity, origin, destin
     ]
 
 
-def _tables(trips, assignments, shipments, strata, stratum_rows, vehicle, part_quantity, part_of, skim_zone, zone_point, crs):
+def _tables(trips, assignments, shipments, strata, stratum_rows, vehicle, part_quantity, part_of, skim_zone, zone_point,
+            capacity_of, crs):
     rows = []
     for trip in trips:
         tour = trip["tour"]
@@ -481,6 +485,7 @@ def _tables(trips, assignments, shipments, strata, stratum_rows, vehicle, part_q
         row.update({column: stratum_rows[first][column] for column in strata if column != "resource"})
         row.update({
             "shipments": len(tour), "tour_quantity": trip["total"], "quantity": trip["load"],
+            "utilization": trip["load"] / capacity_of[vehicle[first]],
             "tour_departure": trip["start"], "departure": trip["departure"], "arrival": trip["arrival"],
             "origin_zone_id": skim_zone[trip["from"]], "destination_zone_id": skim_zone[trip["to"]],
         })

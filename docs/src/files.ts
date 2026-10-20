@@ -5,7 +5,7 @@ export interface Command {
   name: string
   inputs: string[]
   outputs: string[]
-  // Read only when present, or when asked (`--transactions`).
+  // Read only when present, or by an option.
   optional?: string[]
 }
 
@@ -41,17 +41,36 @@ export const commands: Command[] = [
   { name: 'od-flows', inputs: ['productions.csv', 'attractions.csv', 'od_prior.csv'], outputs: ['od_flows.csv'] },
   { name: 'facility-chains', inputs: ['shipments.gpkg', 'facilities.gpkg', 'facility_chain_steps.csv'], outputs: ['transaction_legs.gpkg'] },
   {
+    name: 'parcel-demand',
+    inputs: [
+      'zones.gpkg', 'facilities.gpkg', 'skims.omx', 'parcel_attributes.csv', 'parcel_rates.csv', 'population.csv',
+      'order_levels.csv', 'order_utility.csv', 'operator_shares.csv', 'parcel_settings.csv',
+    ],
+    outputs: ['parcel_demand.csv'],
+  },
+  {
+    name: 'deliveries',
+    inputs: ['parcel_demand.csv', 'zones.gpkg', 'skims.omx', 'delivery_settings.csv', 'delivery_departures.csv'],
+    outputs: ['delivery_tours.gpkg'],
+  },
+  {
+    name: 'trip-matrices',
+    inputs: ['zones.gpkg', 'skims.omx', 'trip_attributes.csv', 'trip_rates.csv', 'trip_decay.csv'],
+    outputs: ['trip_matrices.omx'],
+  },
+  {
     name: 'network-loads',
     inputs: [
-      'network.gpkg', 'shipments.gpkg', 'departures.csv', 'time_intervals.csv', 'dwell_times.csv', 'vehicles.csv',
-      'vehicle_velocities.csv', 'vehicle_capacities.csv', 'road_capacities.csv', 'alternative_specific_constants.csv',
+      'network.gpkg', 'zones.gpkg', 'assignment_vehicles.csv', 'link_speeds.csv', 'road_costs.csv', 'time_intervals.csv',
     ],
-    optional: ['transaction_legs.gpkg'],
+    optional: ['tours.gpkg', 'delivery_tours.gpkg', 'trip_matrices.omx', 'matrix_assignment.csv'],
     outputs: ['network_loads.csv'],
   },
   {
     name: 'network-emissions',
-    inputs: ['network_loads.csv', 'network.gpkg', 'vehicles.csv', 'copert_v_coefficients.csv', 'emission_factors.csv'],
+    inputs: ['network_loads.csv', 'network.gpkg', 'emission_factors.csv'],
+    // COPERT V (--method copert) instead of MASS-GT's factors.
+    optional: ['copert_vehicles.csv', 'copert_v_coefficients.csv', 'non_exhaust_factors.csv'],
     outputs: ['network_emissions.csv'],
   },
 ]
