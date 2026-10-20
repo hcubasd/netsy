@@ -6,8 +6,8 @@ import { Pan } from './scene/pan'
 import type { DataTable } from './types'
 
 // The data-flow graph: one bubble per NetSy file, wired top to bottom as a
-// circuit that fits the window's width and scrolls vertically, fading under
-// the banner. A loaded file opens its table; any other file asks for it.
+// circuit that pans both ways when it outgrows the window, fading under the
+// banner. A loaded file opens its table; any other file asks for it.
 
 const pan = new Pan()
 
@@ -36,11 +36,12 @@ export function DataView({ tables, active, onMap, onLoad, onOpen }: {
   useEffect(() => {
     const element = region.current
     if (!element || !circuit) return
-    pan.setBounds(() => ({ minX: 0, maxX: 0, minY: 0, maxY: circuit.height - element.clientHeight }))
+    pan.setBounds(() => ({ minX: 0, maxX: circuit.width - element.clientWidth, minY: 0, maxY: circuit.height - element.clientHeight }))
     const detach = pan.attach(element)
     const stop = onFrame((dt) => {
       const moved = pan.step(dt)
-      if (moved && world.current) world.current.style.transform = `translateY(${-pan.y}px)`
+      if (moved && world.current) world.current.style.transform = `translate(${-pan.x}px, ${-pan.y}px)`
+      background.x = pan.x
       background.y = pan.y
       return moved
     })
@@ -65,7 +66,7 @@ export function DataView({ tables, active, onMap, onLoad, onOpen }: {
         <button type="button" className="bubble glass" data-glass onClick={onMap}>Map</button>
       </header>
       <div className="data-region" ref={region} data-glass-clip tabIndex={0} aria-label="NetSy data files">
-        {circuit && <div className="circuit" ref={world} style={{ height: circuit.height }}>
+        {circuit && <div className="circuit" ref={world} style={{ width: circuit.width, height: circuit.height }}>
           <svg className="wires" width={circuit.width} height={circuit.height} aria-hidden="true">
             {circuit.wires.map((wire, index) => <line key={index} {...wire} />)}
           </svg>
