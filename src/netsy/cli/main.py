@@ -4,6 +4,10 @@ import importlib
 # command -> (module providing run(force, ...), help text). Modules are imported
 # only when their command runs, so `netsy --help` stays fast.
 SYNTH_COMMANDS = {
+    "agents": (
+        "netsy.cli.synth_agents",
+        "zones.gpkg + size_totals.csv + size_classes.csv -> agents.gpkg",
+    ),
     "desire-lines": (
         "netsy.cli.synth_desire_lines",
         "agents.gpkg -> desire_lines.gpkg",
@@ -35,8 +39,16 @@ def build_parser():
     for name, (module, description) in SYNTH_COMMANDS.items():
         command = commands.add_parser(name, help=description, description=description)
         command.add_argument("--force", action="store_true", help="overwrite the output file if it already exists")
-        if name in {"desire-lines", "network-loads"}:
+        if name in {"agents", "desire-lines", "network-loads"}:
             command.add_argument("--seed", type=int, help="seed the random draws, so the same inputs give the same output")
+        if name == "agents":
+            command.add_argument(
+                "--min-size",
+                type=float,
+                default=0,
+                metavar="SIZE",
+                help="drop agents smaller than SIZE once drawn; their size is not given to others",
+            )
         if name == "network-loads":
             command.add_argument(
                 "--transactions",
@@ -52,6 +64,8 @@ def main(argv=None):
     options = {"force": args.force}
     if hasattr(args, "seed"):
         options["seed"] = args.seed
+    if hasattr(args, "min_size"):
+        options["min_size"] = args.min_size
     if hasattr(args, "transactions"):
         options["transactions"] = args.transactions
     return importlib.import_module(args.module).run(**options)

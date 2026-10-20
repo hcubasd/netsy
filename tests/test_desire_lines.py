@@ -10,12 +10,12 @@ def _agents(rows):
     return geopandas.GeoDataFrame(rows, crs=CRS)
 
 
-def test_provider_is_matched_until_its_capacity_is_depleted():
+def test_producer_is_matched_until_its_production_is_depleted():
     table = desire_lines(
         _agents([
-            {"agent_id": 1, "grain_capacity": 4, "grain_need": 0, "geometry": Point(0, 0)},
-            {"agent_id": 2, "grain_capacity": 0, "grain_need": 2, "geometry": Point(1, 0)},
-            {"agent_id": 3, "grain_capacity": 0, "grain_need": 2, "geometry": Point(2, 0)},
+            {"agent_id": 1, "grain_production": 4, "grain_consumption": 0, "geometry": Point(0, 0)},
+            {"agent_id": 2, "grain_production": 0, "grain_consumption": 2, "geometry": Point(1, 0)},
+            {"agent_id": 3, "grain_production": 0, "grain_consumption": 2, "geometry": Point(2, 0)},
         ]),
         np.random.default_rng(1),
     )
@@ -26,8 +26,8 @@ def test_provider_is_matched_until_its_capacity_is_depleted():
 def test_line_direction_and_totals_follow_provider_and_consumer():
     table = desire_lines(
         _agents([
-            {"agent_id": 1, "grain_capacity": 8, "grain_need": 0, "geometry": Point(0, 0)},
-            {"agent_id": 2, "grain_capacity": 0, "grain_need": 5, "geometry": Point(1, 0)},
+            {"agent_id": 1, "grain_production": 8, "grain_consumption": 0, "geometry": Point(0, 0)},
+            {"agent_id": 2, "grain_production": 0, "grain_consumption": 5, "geometry": Point(1, 0)},
         ]),
         np.random.default_rng(1),
     )
@@ -45,10 +45,10 @@ def test_line_direction_and_totals_follow_provider_and_consumer():
 def test_resources_with_missing_agent_values_only_use_participating_agents():
     table = desire_lines(
         _agents([
-            {"agent_id": 1, "grain_capacity": 3, "grain_need": 0, "parcel_capacity": np.nan, "parcel_need": np.nan, "geometry": Point(0, 0)},
-            {"agent_id": 2, "grain_capacity": 0, "grain_need": 3, "parcel_capacity": np.nan, "parcel_need": np.nan, "geometry": Point(1, 0)},
-            {"agent_id": 3, "grain_capacity": np.nan, "grain_need": np.nan, "parcel_capacity": 2, "parcel_need": 0, "geometry": Point(2, 0)},
-            {"agent_id": 4, "grain_capacity": np.nan, "grain_need": np.nan, "parcel_capacity": 0, "parcel_need": 2, "geometry": Point(3, 0)},
+            {"agent_id": 1, "grain_production": 3, "grain_consumption": 0, "parcel_production": np.nan, "parcel_consumption": np.nan, "geometry": Point(0, 0)},
+            {"agent_id": 2, "grain_production": 0, "grain_consumption": 3, "parcel_production": np.nan, "parcel_consumption": np.nan, "geometry": Point(1, 0)},
+            {"agent_id": 3, "grain_production": np.nan, "grain_consumption": np.nan, "parcel_production": 2, "parcel_consumption": 0, "geometry": Point(2, 0)},
+            {"agent_id": 4, "grain_production": np.nan, "grain_consumption": np.nan, "parcel_production": 0, "parcel_consumption": 2, "geometry": Point(3, 0)},
         ]),
         np.random.default_rng(1),
     )
@@ -57,7 +57,7 @@ def test_resources_with_missing_agent_values_only_use_participating_agents():
 
 def test_an_agent_cannot_trade_with_itself():
     table = desire_lines(
-        _agents([{"agent_id": 1, "grain_capacity": 4, "grain_need": 4, "geometry": Point(0, 0)}]),
+        _agents([{"agent_id": 1, "grain_production": 4, "grain_consumption": 4, "geometry": Point(0, 0)}]),
         np.random.default_rng(1),
     )
     assert table.empty
@@ -65,9 +65,9 @@ def test_an_agent_cannot_trade_with_itself():
 
 def test_seed_repeats_the_same_matching():
     agents = _agents([
-        {"agent_id": 1, "grain_capacity": 4, "grain_need": 0, "geometry": Point(0, 0)},
-        {"agent_id": 2, "grain_capacity": 0, "grain_need": 2, "geometry": Point(1, 0)},
-        {"agent_id": 3, "grain_capacity": 0, "grain_need": 2, "geometry": Point(2, 0)},
+        {"agent_id": 1, "grain_production": 4, "grain_consumption": 0, "geometry": Point(0, 0)},
+        {"agent_id": 2, "grain_production": 0, "grain_consumption": 2, "geometry": Point(1, 0)},
+        {"agent_id": 3, "grain_production": 0, "grain_consumption": 2, "geometry": Point(2, 0)},
     ])
     first = desire_lines(agents, np.random.default_rng(3))
     second = desire_lines(agents, np.random.default_rng(3))

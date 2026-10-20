@@ -37,6 +37,7 @@ on the local network. Its production output is static and is built with `npm run
 Run each command in the directory holding its input files.
 
 ```
+netsy synth agents --seed 1       # zones + size totals + size classes -> agents.gpkg
 netsy synth desire-lines --seed 1 # agents.gpkg -> desire_lines.gpkg
 netsy synth od-flows               # production/attraction marginals + OD prior -> od_flows.csv
 netsy synth facility-chains        # direct transactions + facilities -> transaction_legs.gpkg
@@ -45,7 +46,7 @@ netsy synth network-emissions      # network loads + COPERT inputs -> network_em
 ```
 
 An existing output file is only replaced with `--force`.
-`desire-lines` and `network-loads` make random draws; pass `--seed` to reproduce them.
+`agents`, `desire-lines`, and `network-loads` make random draws; pass `--seed` to reproduce them.
 
 `network-loads` reads `desire_lines.gpkg` by default. Pass
 `--transactions transaction_legs.gpkg` to route facility-mediated transaction legs instead:
@@ -63,7 +64,7 @@ configures it.
 |---|---|---|
 | Actors | Produce, consume, carry, or transform resources. | Establishment register, household survey, an operator's records, or firm synthesis. |
 | Facilities | Locations with explicit operational roles and throughput constraints. | Depot, UCC, consolidation centre, microhub, hospital, transfer station. |
-| Transactions | Quantified origin-to-destination commitments with stable endpoint identities. | Observed shipment, balanced OD flow, parcel order, or capacity/need match. |
+| Transactions | Quantified origin-to-destination commitments with stable endpoint identities. | Observed shipment, balanced OD flow, parcel order, or production/consumption match. |
 | Transaction legs | A direct transaction or ordered legs through facilities. | Supplier → UCC → customer; depot → microhub → low-emission-zone recipient. |
 | Tours and movements | Vehicle operations that serve transaction legs on the road network. | Freight delivery, parcel route, service visit, or another capacity-constrained movement. |
 | Scenario data | Choice coefficients, policy restrictions, network/fleet assumptions, and factor models. | A local calibration, an observed policy rule, COPERT V coefficients. |
@@ -75,11 +76,46 @@ to the general core.
 
 ## Data files
 
-`agents.gpkg` holds the actors: an `agent_id`, a `{resource}_capacity` and a
-`{resource}_need` column for every resource (whole numbers; an empty cell means the agent
-does not take part in that resource), any other attributes, and point geometry. It may come
-from any source, such as a register, an operator's records, or a firm-synthesis adapter.
-`desire_lines.gpkg` contains one direct
+### Agents
+
+`agents` synthesizes the actors the way freight models such as MASS-GT synthesize firms:
+from each stratum's total size and a size distribution per agent class. A stratum is a zone
+and any other dimensions, such as an employment sector; it is also the agent class.
+`size_classes.csv` may be keyed by any subset of the stratum columns, so a size
+distribution can be national, per sector, per zone, or anything between. What an agent
+produces and consumes follows from its size and class later, when shipments are drawn.
+
+| file | fields | purpose |
+|---|---|---|
+| `zones.gpkg` | `zone_id`, polygon geometry | Where agents are placed. |
+| `size_totals.csv` | stratum columns (`zone_id` among them), `size` | The total size of each stratum, such as its jobs. |
+| `size_classes.csv` | key columns, `size_min`, `size_max`, `probability`, and `size_median` for open classes | Each agent class's size distribution, in whole-number size classes; an empty `size_max` makes a class open. |
+
+For example, firms drawn from jobs per zone and sector with a national size distribution per
+sector:
+
+| zone_id | sector | size |
+|---|---|---:|
+| 1 | government | 38 |
+| 1 | services | 13 |
+
+| sector | size_min | size_max | size_median | probability |
+|---|---:|---:|---:|---:|
+| retail | 0 | 4 | | 0.850 |
+| retail | 5 | 9 | | 0.083 |
+| retail | 100 | | 150 | 0.004 |
+
+`--min-size` drops agents smaller than a size once they are drawn, as MASS-GT drops firms of
+three employees or fewer; their size is not given to others.
+
+`agents.gpkg` holds the actors: an `agent_id`, the stratum columns, `size`, and point
+geometry.
+
+`desire-lines` matches agents that carry a `{resource}_production` and a
+`{resource}_consumption` column for every resource (whole numbers; an empty cell means the
+agent does not take part), such as agents from a register or an operator's records. The
+agents NetSy synthesizes do not carry them: a shipments stage, after MASS-GT's, is to
+replace this matching. `desire_lines.gpkg` contains one direct
 provider-to-consumer transaction per row. It preserves both endpoints as identities;
 geometry is its spatial representation, not its only identity.
 
@@ -87,9 +123,9 @@ geometry is its spatial representation, not its only identity.
 |---|---|---:|---:|---:|---|
 | 0 | resource_1 | 2 | 1 | 8 | LINESTRING (0.42 0.71, 0.38 0.65) |
 
-For each resource, a provider is selected by remaining capacity and matched with
-consumers until the provider is depleted. Consumers are selected by their remaining need
-and distance-weighted proximity. A desire line starts at its provider and ends at its
+For each resource, a producer is selected by remaining production and matched with
+consumers until the producer is depleted. Consumers are selected by their remaining
+consumption and distance-weighted proximity. A desire line starts at its provider and ends at its
 consumer.
 
 ### Facility-mediated transactions
@@ -213,7 +249,16 @@ residual flows.
 
 ## Model
 
-Desire lines match each resource's providers to consumers by remaining quantity and
+Agents are drawn stratum by stratum, as MASS-GT draws firms. While a stratum $s$ has size
+$S_s$ left, an agent's size class $c$ is drawn with probability $p_{k(s),c}$ for its agent
+class $k(s)$. A closed class draws the size $e$ uniformly among the whole numbers from
+$\mathrm{min}_c$ to $\mathrm{max}_c$; an open class draws it, rounded, from a triangular
+distribution from $\mathrm{min}_c$ through a mode of $\max(\mathrm{min}_c, S_s/2)$ to
+$\max(\mathrm{median}_c, 1.5\,S_s)$. A size above $1.3\,S_s$ becomes $S_s$. $S_s$ falls by
+$e$, and the number of agents is where $S_s$ runs out. Agents of size zero, or below
+`--min-size`, are dropped, and each remaining agent is placed uniformly in its zone.
+
+Desire lines match each resource's producers to consumers by remaining quantity and
 distance-weighted proximity.
 
 Network loads apportion each resource's transaction total exactly across departure

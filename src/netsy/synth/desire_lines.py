@@ -13,13 +13,13 @@ def _pick(items, weights, rng):
 
 
 def _resources(agents):
-    return sorted(column[:-len("_capacity")] for column in agents.columns if column.endswith("_capacity"))
+    return sorted(column[:-len("_production")] for column in agents.columns if column.endswith("_production"))
 
 
 def desire_lines(agents, rng):
-    """Transactions from capacity providers to need consumers, resource by
-    resource. Providers are drawn by remaining capacity and remain selected
-    until depleted; consumers are drawn by remaining need and spatial
+    """Transactions from producing agents to consuming agents, resource by
+    resource. Producers are drawn by remaining production and remain selected
+    until depleted; consumers are drawn by remaining consumption and spatial
     proximity. The returned line starts at its provider and ends at its
     consumer.
     """
@@ -32,36 +32,36 @@ def desire_lines(agents, rng):
     transaction_id = 0
 
     for resource in _resources(agents):
-        capacities = dict(zip(agent_ids, agents[f"{resource}_capacity"]))
-        needs = dict(zip(agent_ids, agents[f"{resource}_need"]))
-        capacities = {agent_id: int(value) if not pd.isna(value) else 0 for agent_id, value in capacities.items()}
-        needs = {agent_id: int(value) if not pd.isna(value) else 0 for agent_id, value in needs.items()}
+        production = dict(zip(agent_ids, agents[f"{resource}_production"]))
+        consumption = dict(zip(agent_ids, agents[f"{resource}_consumption"]))
+        production = {agent_id: int(value) if not pd.isna(value) else 0 for agent_id, value in production.items()}
+        consumption = {agent_id: int(value) if not pd.isna(value) else 0 for agent_id, value in consumption.items()}
 
         while True:
             providers = [
                 agent_id
-                for agent_id, capacity in capacities.items()
-                if capacity > 0 and any(need > 0 and consumer_id != agent_id for consumer_id, need in needs.items())
+                for agent_id, produced in production.items()
+                if produced > 0 and any(consumed > 0 and consumer_id != agent_id for consumer_id, consumed in consumption.items())
             ]
             if not providers:
                 break
-            provider = _pick(providers, [capacities[agent_id] for agent_id in providers], rng)
+            provider = _pick(providers, [production[agent_id] for agent_id in providers], rng)
 
-            while capacities[provider] > 0:
-                consumers = [agent_id for agent_id, need in needs.items() if need > 0 and agent_id != provider]
+            while production[provider] > 0:
+                consumers = [agent_id for agent_id, consumed in consumption.items() if consumed > 0 and agent_id != provider]
                 if not consumers:
                     break
                 consumer = _pick(
                     consumers,
                     [
-                        needs[agent_id] * (1 / (1 + math.exp(points[provider].distance(points[agent_id]) / scale)))
+                        consumption[agent_id] * (1 / (1 + math.exp(points[provider].distance(points[agent_id]) / scale)))
                         for agent_id in consumers
                     ],
                     rng,
                 )
-                quantity = min(capacities[provider], needs[consumer])
-                capacities[provider] -= quantity
-                needs[consumer] -= quantity
+                quantity = min(production[provider], consumption[consumer])
+                production[provider] -= quantity
+                consumption[consumer] -= quantity
                 rows.append({
                     "transaction_id": transaction_id,
                     "resource": resource,

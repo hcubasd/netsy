@@ -17,8 +17,8 @@ def _write_agents():
     geopandas.GeoDataFrame(
         {
             "agent_id": [1, 2, 3],
-            "grain_capacity": [4, 0, 0],
-            "grain_need": [0, 2, 2],
+            "grain_production": [4, 0, 0],
+            "grain_consumption": [0, 2, 2],
         },
         geometry=[Point(0, 0), Point(1, 0), Point(2, 0)],
         crs=CRS,
