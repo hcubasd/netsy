@@ -1,6 +1,6 @@
 # netsy
 
-NetSy is a general spatial resource-flow synthesizer. It turns case-specific activity,
+NetSy (Network loads Synthesizer) is a general spatial resource-flow synthesizer. It turns case-specific activity,
 facility, vehicle, timing, network, and emissions evidence into explicit transactions,
 capacity-constrained movements, directional link loads, and emissions.
 
