@@ -297,6 +297,48 @@ step may derive speeds from it.
 `network_loads.parquet` has a row per link, interval, vehicle and segment: `trips`, their mean
 `utilization`, and the link's `speed` for the vehicle.
 
+#### Grade-informed paths
+
+Optional `uphill_cost_per_km_per_percent` and `downhill_cost_per_km_per_percent`
+columns in `assignment_vehicles.csv` add vehicle-specific slope penalties to
+the link costs used by Dijkstra. Missing or blank coefficients mean zero;
+coefficients must be finite and nonnegative. When either is positive,
+`network.gpkg` must supply a finite `grade` on **every** directed link, in signed
+percentage points: `5` means a 5% climb from `from_node` to `to_node`, and `-5`
+means a descent. Reverse arcs need the corresponding opposite grade; geometry
+coordinate order is not used to infer it. Supply explicit grades for connectors
+too. NetSy does not derive elevation or grade from 2D geometry.
+
+For each link, before applying `road_costs.csv` rules:
+
+```text
+cost = cost_per_hour * length / speed + cost_per_km * length
+     + length * (uphill_cost_per_km_per_percent * max(grade, 0)
+               + downhill_cost_per_km_per_percent * max(-grade, 0))
+```
+
+Use the same cost unit throughout (for example, euros, euros/hour and euros/km).
+A coefficient of `0.2` adds one cost unit to a 1 km link climbing 5%.
+These are declared scenario preferences, not calibrated energy consumption,
+COPERT-derived costs or a model of regenerative braking. They do not depend on
+payload. Road-cost replacement rules still replace the whole link cost,
+including its grade penalty; additive rules retain it and exclusions remain
+available. Final Dijkstra weights must be nonnegative (`+inf` excludes a link).
+
+For example, add the optional columns to the existing vehicle table:
+
+```csv
+vehicle,speed_class,cost_per_hour,cost_per_km,uphill_cost_per_km_per_percent,downhill_cost_per_km_per_percent
+truck,truck,25,0.6,0.2,0
+```
+
+The values above are illustrative, not estimated preferences. Run the usual
+`netsy synth network-loads` command (`--force` to replace existing loads), then
+regenerate emissions for the changed paths. Defaults preserve the supplied-cost
+baseline. Grade-aware assignment and COPERT grade effects are independent
+options: changing paths does not change supplied link speeds or solve congestion
+feedback. Existing flat-grade Dutch inputs produce no slope penalty.
+
 ### Network emissions
 
 `network-emissions` computes grams per load row and pollutant, a column per pollutant.

@@ -78,3 +78,30 @@ def test_network_loads_need_trips(capsys):
     _write_inputs()
     assert main(["synth", "network-loads"]) == 1
     assert "needs trips" in capsys.readouterr().err
+
+
+def test_grade_routing_reads_network_and_vehicle_columns_through_cli():
+    _write_inputs()
+    network = geopandas.read_file("network.gpkg")
+    network["grade"] = [5, -5, -5, 5]
+    bypass = network.iloc[[0]].copy()
+    bypass["link_id"] = 5
+    bypass["to_node"] = 3
+    bypass["length"] = 3.0
+    bypass["grade"] = 0.0
+    bypass.geometry = [LineString([(1, 0), (3, 0)])]
+    pd.concat([network, bypass], ignore_index=True).to_file("network.gpkg")
+    _csv("link_speeds.csv", [(i, "van", 30) for i in range(1, 6)], ["link_id", "speed_class", "speed"])
+    geopandas.GeoDataFrame({
+        "departure": [7], "vehicle": ["van"], "utilization": [.5],
+        "origin_zone_id": [1], "destination_zone_id": [3],
+    }, geometry=[LineString([(1, 0), (3, 0)])], crs=CRS).to_file("tours.gpkg")
+    assert main(["synth", "network-loads"]) == 0
+    assert set(pd.read_parquet("network_loads.parquet").link_id.astype(str)) == {"1", "3"}
+    vehicles = pd.read_csv("assignment_vehicles.csv")
+    vehicles["uphill_cost_per_km_per_percent"] = 1
+    vehicles.to_csv("assignment_vehicles.csv", index=False)
+    assert main(["synth", "network-loads", "--force"]) == 0
+    loads = pd.read_parquet("network_loads.parquet")
+    assert loads.link_id.astype(str).tolist() == ["5"]
+    assert loads.trips.tolist() == [1.0] and loads.utilization.tolist() == [.5]

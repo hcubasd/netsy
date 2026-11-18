@@ -10,6 +10,10 @@ link and speed class, and optionally per time interval; this stage does not
 change them. A tour trip counts in the interval of its departure, a matrix
 trip over the whole period. Loads are reported per link, interval, vehicle
 and segment: the number of trips, their mean utilization and the speed.
+
+Optional vehicle costs per kilometre per percentage point of uphill/downhill
+grade add a nonnegative directional slope penalty before road-cost overrides.
+These are supplied route preferences, not an estimated energy model.
 """
 
 import multiprocessing
@@ -23,6 +27,7 @@ from scipy.sparse.csgraph import dijkstra
 from netsy.synth.agents import _zone_key
 
 TRIP_COLUMNS = ("departure", "vehicle", "utilization", "origin_zone_id", "destination_zone_id")
+GRADE_COST_COLUMNS = ("uphill_cost_per_km_per_percent", "downhill_cost_per_km_per_percent")
 
 
 def _intervals(table):
@@ -150,6 +155,23 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
     for column in ("speed_class", "cost_per_hour", "cost_per_km"):
         if column not in vehicles.columns:
             raise ValueError(f"assignment_vehicles.csv: missing column {column!r}")
+    # Missing/blank optional costs mean zero; malformed, negative or infinite
+    # coefficients must not silently enable invalid Dijkstra weights.
+    for column in GRADE_COST_COLUMNS:
+        supplied = vehicles[column].replace("", np.nan) if column in vehicles else pd.Series(0.0, index=vehicles.index)
+        values = pd.to_numeric(supplied, errors="coerce")
+        if (supplied.notna() & values.isna()).any() or (~np.isfinite(values.fillna(0))).any() or (values < 0).any():
+            raise ValueError(f"assignment_vehicles.csv: {column!r} must hold finite nonnegative numbers or be empty")
+        vehicles[column] = values.fillna(0)
+    grade_enabled = vehicles[list(GRADE_COST_COLUMNS)].to_numpy().any()
+    if grade_enabled:
+        if "grade" not in network:
+            raise ValueError("network.gpkg: 'grade' (%) is required for grade-aware routing")
+        grade = pd.to_numeric(network["grade"], errors="coerce").to_numpy(float)
+        if not np.isfinite(grade).all():
+            raise ValueError("network.gpkg: 'grade' must hold finite signed percentages on every link for grade-aware routing")
+    else:
+        grade = np.zeros(len(network))
     speed_keys = [column for column in ("time_interval",) if column in speeds.columns]
     speed_table = speeds.assign(
         link=pd.Index(link_ids).get_indexer(speeds["link_id"].map(_zone_key)),
@@ -179,7 +201,8 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
     work = {}
 
     classes = {
-        vehicle: (_zone_key(row["speed_class"]), float(row["cost_per_hour"]), float(row["cost_per_km"]))
+        vehicle: (_zone_key(row["speed_class"]), float(row["cost_per_hour"]), float(row["cost_per_km"]),
+                  *(float(row[column]) for column in GRADE_COST_COLUMNS))
         for vehicle, row in vehicles.iterrows()
     }
 
@@ -256,10 +279,12 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
     unrouted = 0.0
     speed_by_class = {}
     for route_class, trips in work.items():
-        speed_class, per_hour, per_km, interval, combustion = route_class
+        speed_class, per_hour, per_km, uphill, downhill, interval, combustion = route_class
         speed = speed_of(speed_class, interval)
         speed_by_class[(speed_class, interval)] = speed
         cost = per_hour * length / speed + per_km * length
+        if uphill or downhill:
+            cost += length * (uphill * np.maximum(grade, 0) + downhill * np.maximum(-grade, 0))
         for rule in road_costs.to_dict("records"):
             if not pd.isna(rule.get("speed_class")) and _zone_key(rule["speed_class"]) != speed_class:
                 continue
@@ -280,6 +305,8 @@ def network_loads(network, zones, vehicles, speeds, road_costs, intervals, trip_
                 cost[mask] += float(rule["cost"])
             else:
                 cost[mask] = float(rule["cost"])
+        if np.isnan(cost).any() or (cost < 0).any():
+            raise ValueError("assignment costs must be nonnegative and not NaN for Dijkstra; use +inf to exclude links")
         for sample in range(int(route_samples)):
             sampled_cost = cost if route_samples == 1 else cost * rng.uniform(1-jitter, 1+jitter, len(cost))
             graph = csr_matrix((sampled_cost[edges], (tails[edges], heads[edges])), shape=(len(node_ids),) * 2)
