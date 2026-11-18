@@ -3,7 +3,7 @@ name: Deploy visualizer to GitHub Pages
 on:
   push:
     branches:
-      - v0.5
+      - v0.4
     paths:
       - docs/**
       - .github/workflows/pages.yaml
